@@ -11,7 +11,6 @@ Rules-Requires-Root: no
 Build-Depends: bison,
                debhelper-compat (= 13),
                dh-package-notes,
-               dh-sequence-movetousr,
                flex,
                libxtables-dev,
                libatm1-dev,
