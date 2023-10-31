@@ -1,10 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * tc_qdisc.c		"tc qdisc".
- *
- *		This program is free software; you can redistribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
  *
  * Authors:	Alexey Kuznetsov, <kuznet@ms2.inr.ac.ru>
  *		J Hadi Salim: Extension to ingress
@@ -191,8 +187,7 @@ static int tc_qdisc_modify(int cmd, unsigned int flags, int argc, char **argv)
 			addattr_l(&req.n, sizeof(req), TCA_STAB_DATA, stab.data,
 				  stab.szopts.tsize * sizeof(__u16));
 		addattr_nest_end(&req.n, tail);
-		if (stab.data)
-			free(stab.data);
+		free(stab.data);
 	}
 
 	if (d[0])  {
@@ -329,7 +324,7 @@ int print_qdisc(struct nlmsghdr *n, void *arg)
 	print_nl();
 
 	if (show_details && tb[TCA_STAB]) {
-		print_size_table(fp, " ", tb[TCA_STAB]);
+		print_size_table(tb[TCA_STAB]);
 		print_nl();
 	}
 
@@ -346,6 +341,8 @@ int print_qdisc(struct nlmsghdr *n, void *arg)
 			print_nl();
 		}
 	}
+
+	print_ext_msg(tb);
 	close_json_object();
 	fflush(fp);
 	return 0;
@@ -435,6 +432,7 @@ static int tc_qdisc_list(int argc, char **argv)
 	new_json_obj(json);
 	if (rtnl_dump_filter(&rth, print_qdisc, stdout) < 0) {
 		fprintf(stderr, "Dump terminated\n");
+		delete_json_obj();
 		return 1;
 	}
 	delete_json_obj();

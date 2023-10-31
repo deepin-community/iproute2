@@ -1,13 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * tc_core.c		TC core library.
  *
- *		This program is free software; you can redistribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
- *
  * Authors:	Alexey Kuznetsov, <kuznet@ms2.inr.ac.ru>
- *
  */
 
 #include <stdio.h>
@@ -175,7 +170,7 @@ int tc_calc_rtable_64(struct tc_ratespec *r, __u32 *rtab,
 		rtab[i] = tc_calc_xmittime(bps, sz);
 	}
 
-	r->cell_align =  -1;
+	r->cell_align = -1;
 	r->cell_log = cell_log;
 	r->linklayer = (linklayer & TC_LINKLAYER_MASK);
 	return cell_log;

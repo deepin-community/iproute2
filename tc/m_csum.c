@@ -1,10 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * m_csum.c	checksum updating action
- *
- *		This program is free software; you can distribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
  *
  * Authors: Gregoire Baron <baronchon@n7mm.org>
  */
@@ -98,7 +94,9 @@ parse_csum(struct action_util *a, int *argc_p,
 	while (argc > 0) {
 		if (matches(*argv, "csum") == 0) {
 			NEXT_ARG();
-			if (parse_csum_args(&argc, &argv, &sel)) {
+			if (strcmp(*argv, "index") == 0) {
+				goto skip_args;
+			} else if (parse_csum_args(&argc, &argv, &sel)) {
 				fprintf(stderr, "Illegal csum construct (%s)\n",
 					*argv);
 				explain();
@@ -127,6 +125,7 @@ parse_csum(struct action_util *a, int *argc_p,
 
 	if (argc) {
 		if (matches(*argv, "index") == 0) {
+skip_args:
 			NEXT_ARG();
 			if (get_u32(&sel.index, *argv, 10)) {
 				fprintf(stderr, "Illegal \"index\" (%s) <csum>\n",

@@ -229,7 +229,7 @@ throw " | " unreachable " | " prohibit " | " blackhole " | " nat " ]"
 .IR ENCAP_SEG6 " := "
 .B seg6
 .BR mode " [ "
-.BR encap " | " inline " | " l2encap " ] "
+.BR encap " | " encap.red " | " inline " | " l2encap " | " l2encap.red " ] "
 .B segs
 .IR SEGMENTS " [ "
 .B hmac
@@ -245,14 +245,20 @@ throw " | " unreachable " | " prohibit " | " blackhole " | " nat " ]"
 
 .ti -8
 .IR ENCAP_IOAM6 " := "
-.B ioam6
-.BR trace
-.BR prealloc
-.BR type
+.BR ioam6 " ["
+.B freq
+.IR K "/" N " ] "
+.BR mode " [ "
+.BR inline " | " encap " | " auto " ] ["
+.B tundst
+.IR ADDRESS " ] "
+.B trace
+.B prealloc
+.B type
 .IR IOAM6_TRACE_TYPE
-.BR ns
+.B ns
 .IR IOAM6_NAMESPACE
-.BR size
+.B size
 .IR IOAM6_TRACE_SIZE
 
 .ti -8
@@ -350,8 +356,9 @@ normal routing tables.
 .P
 .B Route tables:
 Linux-2.x can pack routes into several routing tables identified
-by a number in the range from 1 to 2^32-1 or by name from the file
-.B @SYSCONFDIR@/rt_tables
+by a number in the range from 1 to 2^32-1 or by name from
+.B @SYSCONF_USR_DIR@/rt_tables or
+.B @SYSCONF_ETC_DIR@/rt_tables (has precedence if exists).
 By default all normal routes are inserted into the
 .B main
 table (ID 254) and the kernel only uses this table when calculating routes.
@@ -414,7 +421,8 @@ may still match a route with a zero TOS.
 .I TOS
 is either an 8 bit hexadecimal number or an identifier
 from
-.BR "@SYSCONFDIR@/rt_dsfield" .
+.BR "@SYSCONF_USR_DIR@/rt_dsfield" or
+.BR "@SYSCONF_ETC_DIR@/rt_dsfield" (has precedence if exists).
 
 .TP
 .BI metric " NUMBER"
@@ -428,8 +436,9 @@ is an arbitrary 32bit number, where routes with lower values are preferred.
 .BI table " TABLEID"
 the table to add this route to.
 .I TABLEID
-may be a number or a string from the file
-.BR "@SYSCONFDIR@/rt_tables" .
+may be a number or a string from
+.BR "@SYSCONF_USR_DIR@/rt_tables" or
+.BR "@SYSCONF_ETC_DIR@/rt_tables" (has precedence if exists).
 If this parameter is omitted,
 .B ip
 assumes the
@@ -469,8 +478,9 @@ covered by the route prefix.
 .BI realm " REALMID"
 the realm to which this route is assigned.
 .I REALMID
-may be a number or a string from the file
-.BR "@SYSCONFDIR@/rt_realms" .
+may be a number or a string from
+.BR "@SYSCONF_USR_DIR@/rt_realms" or
+.BR "@SYSCONF_ETC_DIR@/rt_realms" (has precedence if exists).
 
 .TP
 .BI mtu " MTU"
@@ -620,8 +630,9 @@ command.
 .BI scope " SCOPE_VAL"
 the scope of the destinations covered by the route prefix.
 .I SCOPE_VAL
-may be a number or a string from the file
-.BR "@SYSCONFDIR@/rt_scopes" .
+may be a number or a string from
+.BR "@SYSCONF_USR_DIR@/rt_scopes" or
+.BR "@SYSCONF_ETC_DIR@/rt_scopes" (has precedence if exists).
 If this parameter is omitted,
 .B ip
 assumes scope
@@ -640,8 +651,9 @@ routes.
 .BI protocol " RTPROTO"
 the routing protocol identifier of this route.
 .I RTPROTO
-may be a number or a string from the file
-.BR "@SYSCONFDIR@/rt_protos" .
+may be a number or a string from
+.BR "@SYSCONF_ETC_DIR@/rt_protos" or
+.BR "@SYSCONF_ETC_DIR@/rt_protos" (has precedence if exists).
 If the routing protocol ID is not given,
 .B ip assumes protocol
 .B boot
@@ -732,6 +744,9 @@ is a string specifying the supported encapsulation type. Namely:
 .sp
 .BI ioam6
 - encapsulation type IPv6 IOAM
+.sp
+.BI xfrm
+- encapsulation type XFRM
 
 .in -8
 .I ENCAPHDR
@@ -801,8 +816,20 @@ is a set of encapsulation attributes specific to the
 - Encapsulate packet in an outer IPv6 header with SRH
 .sp
 
+.B mode encap.red
+- Encapsulate packet in an outer IPv6 header with SRH applying the
+reduced segment list. When there is only one segment and the HMAC is
+not present, the SRH is omitted.
+.sp
+
 .B mode l2encap
 - Encapsulate ingress L2 frame within an outer IPv6 header and SRH
+.sp
+
+.B mode l2encap.red
+- Encapsulate ingress L2 frame within an outer IPv6 header and SRH
+applying the reduced segment list. When there is only one segment
+and the HMAC is not present, the SRH is omitted.
 .sp
 
 .I SEGMENTS
@@ -828,17 +855,27 @@ related to an action use the \fB-s\fR flag in the \fBshow\fR command.
 The following actions are currently supported (\fBLinux 4.14+ only\fR).
 .in +2
 
-.B End
+.BR End " [ " flavors
+.IR FLAVORS " ] "
 - Regular SRv6 processing as intermediate segment endpoint.
 This action only accepts packets with a non-zero Segments Left
-value. Other matching packets are dropped.
+value. Other matching packets are dropped. The presence of flavors
+can change the regular processing of an End behavior according to
+the user-provided Flavor operations and information carried in the packet.
+See \fBFlavors parameters\fR section.
 
 .B End.X nh6
 .I NEXTHOP
+.RB [ " flavors "
+.IR FLAVORS " ] "
 - Regular SRv6 processing as intermediate segment endpoint.
 Additionally, forward processed packets to given next-hop.
 This action only accepts packets with a non-zero Segments Left
-value. Other matching packets are dropped.
+value. Other matching packets are dropped. The presence of flavors
+can change the regular processing of an End.X behavior according to
+the user-provided Flavor operations and information carried in the packet.
+See \fBFlavors parameters\fR section.
+
 
 .B End.DX6 nh6
 .I NEXTHOP
@@ -854,8 +891,9 @@ matching packets are dropped.
 - Decapsulate the inner IPv6 packet and forward it according to the
 specified lookup table.
 .I TABLEID
-is either a number or a string from the file
-.BR "@SYSCONFDIR@/rt_tables" .
+is either a number or a string from
+.BR "@SYSCONF_USR_DIR@/rt_tables" or
+.BR "@SYSCONF_ETC_DIR@/rt_tables" (has precedence if exists).
 If
 .B vrftable
 is used, the argument must be a VRF device associated with
@@ -870,8 +908,9 @@ and an inner IPv6 packet. Other matching packets are dropped.
 - Decapsulate the inner IPv4 packet and forward it according to the
 specified lookup table.
 .I TABLEID
-is either a number or a string from the file
-.BR "@SYSCONFDIR@/rt_tables" .
+is either a number or a string from
+.BR "@SYSCONF_USR_DIR@/rt_tables" or
+.BR "@SYSCONF_ETC_DIR@/rt_tables" (has precedence if exists).
 The argument must be a VRF device associated with the table id.
 Moreover, the VRF table associated with the table id must be configured
 with the VRF strict mode turned on (net.vrf.strict_mode=1). This action
@@ -883,8 +922,9 @@ at all, and an inner IPv4 packet. Other matching packets are dropped.
 - Decapsulate the inner IPv4 or IPv6 packet and forward it according
 to the specified lookup table.
 .I TABLEID
-is either a number or a string from the file
-.BR "@SYSCONFDIR@/rt_tables" .
+is either a number or a string from
+.BR "@SYSCONF_USR_DIR@/rt_tables" or
+.BR "@SYSCONF_ETC_DIR@/rt_tables" (has precedence if exists).
 The argument must be a VRF device associated with the table id.
 Moreover, the VRF table associated with the table id must be configured
 with the VRF strict mode turned on (net.vrf.strict_mode=1). This action
@@ -911,20 +951,110 @@ Additionally, encapsulate the matching packet within an outer IPv6 header
 followed by the specified SRH. The destination address of the outer IPv6
 header is set to the first segment of the new SRH. The source
 address is set as described in \fBip-sr\fR(8).
+
+.B Flavors parameters
+
+The flavors represent additional operations that can modify or extend a
+subset of the existing behaviors.
+.in +2
+
+.B flavors
+.IR OPERATION "[," OPERATION "] [" ATTRIBUTES "]"
+.in +2
+
+.IR OPERATION " := { "
+.BR psp " | "
+.BR usp " | "
+.BR usd " | "
+.BR next-csid " }"
+
+.IR ATTRIBUTES " := {"
+.IR "KEY VALUE" " } ["
+.IR ATTRIBUTES " ]"
+
+.IR KEY " := { "
+.BR lblen " | "
+.BR nflen " } "
 .in -2
+
+.B psp
+- The Penultimate Segment Pop (PSP) copies the last SID from the SID List
+(carried by the outermost SRH) into the IPv6 Destination Address (DA) and
+removes (i.e. pops) the SRH from the IPv6 header.
+The PSP operation takes place only at a penultimate SR Segment Endpoint node
+(e.g., the Segment Left must be one) and does not happen at non-penultimate
+endpoint nodes. This flavor is currently only supported by End behavior.
+
+.B usp
+- Ultimate Segment Pop of the SRH (not yet supported in kernel)
+
+.B usd
+- Ultimate Segment Decapsulation (not yet supported in kernel)
+
+.B next-csid
+- The NEXT-C-SID mechanism offers the possibility of encoding
+several SRv6 segments within a single 128 bit SID address. The NEXT-C-SID
+flavor can be configured to support user-provided Locator-Block and
+Locator-Node Function lengths. If Locator-Block and/or Locator-Node Function
+lengths are not provided by the user during configuration of an SRv6 End
+behavior instance with NEXT-C-SID flavor, the default value is 32-bit for
+Locator-Block and 16-bit for Locator-Node Function.
+
+.BI lblen " VALUE "
+- defines the Locator-Block length for NEXT-C-SID flavor.
+The Locator-Block length must be greater than 0 and evenly divisible by 8. This
+attribute can be used only with NEXT-C-SID flavor.
+
+.BI nflen " VALUE "
+- defines the Locator-Node Function length for NEXT-C-SID
+flavors. The Locator-Node Function length must be greater than 0 and evenly
+divisible by 8. This attribute can be used only with NEXT-C-SID flavor.
+.in -4
 
 .B ioam6
 .in +2
+.B freq K/N
+- Inject IOAM in K packets every N packets (default is 1/1).
+
+.B mode inline
+- Directly insert IOAM after IPv6 header (default mode).
+.sp
+
+.B mode encap
+- Encapsulate packet in an outer IPv6 header with IOAM.
+.sp
+
+.B mode auto
+- Automatically use inline mode for local packets and encap mode for in-transit
+packets.
+.sp
+
+.B tundst
+.I ADDRESS
+- IPv6 address of the tunnel destination (outer header), not used with inline
+mode.
+
+.B type
 .I IOAM6_TRACE_TYPE
 - List of IOAM data required in the trace, represented by a bitfield (24 bits).
 .sp
 
+.B ns
 .I IOAM6_NAMESPACE
 - Numerical value to represent an IOAM namespace. See \fBip-ioam\fR(8).
 .sp
 
+.B size
 .I IOAM6_TRACE_SIZE
 - Size, in octets, of the pre-allocated trace data block.
+.in -2
+
+.B xfrm
+.in +2
+.B if_id
+.I IF_ID
+.B  " [ link_dev
+.IR LINK_DEV " ] "
 .in -4
 
 .in -8
@@ -1249,9 +1379,24 @@ ip -6 route add 2001:db8:1::/64 encap seg6local action End.DT46 vrftable 100 dev
 Adds an IPv6 route with SRv6 decapsulation and forward with lookup in VRF table.
 .RE
 .PP
-ip -6 route add 2001:db8:1::/64 encap ioam6 trace prealloc type 0x800000 ns 1 size 12 dev eth0
+ip -6 route add 2001:db8:1::/64 encap seg6local action End flavors psp dev eth0
 .RS 4
-Adds an IPv6 route with an IOAM Pre-allocated Trace encapsulation that only includes the hop limit and the node id, configured for the IOAM namespace 1 and a pre-allocated data block of 12 octets.
+Adds an IPv6 route with SRv6 End behavior with psp flavor enabled.
+.RE
+.PP
+ip -6 route add 2001:db8:1::/64 encap seg6local action End flavors next-csid dev eth0
+.RS 4
+Adds an IPv6 route with SRv6 End behavior with next-csid flavor enabled.
+.RE
+.PP
+ip -6 route add 2001:db8:1::/64 encap seg6local action End flavors next-csid lblen 48 nflen 16 dev eth0
+.RS 4
+Adds an IPv6 route with SRv6 End behavior with next-csid flavor enabled and user-provided Locator-Block and Locator-Node Function lengths.
+.RE
+.PP
+ip -6 route add 2001:db8:1::/64 encap ioam6 freq 2/5 mode encap tundst 2001:db8:42::1 trace prealloc type 0x800000 ns 1 size 12 dev eth0
+.RS 4
+Adds an IPv6 route with an IOAM Pre-allocated Trace encapsulation (ip6ip6) that only includes the hop limit and the node id, configured for the IOAM namespace 1 and a pre-allocated data block of 12 octets (will be injected in 2 packets every 5 packets).
 .RE
 .PP
 ip route add 10.1.1.0/30 nhid 10

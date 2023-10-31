@@ -1,13 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * fs.c         filesystem APIs
  *
- *		This program is free software; you can redistribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
- *
  * Authors:	David Ahern <dsa@cumulusnetworks.com>
- *
  */
 
 #include <sys/types.h>
@@ -46,7 +41,7 @@ static int name_to_handle_at(int dirfd, const char *pathname,
 	struct file_handle *handle, int *mount_id, int flags)
 {
 	return syscall(__NR_name_to_handle_at, dirfd, pathname, handle,
-	               mount_id, flags);
+		       mount_id, flags);
 }
 
 static int open_by_handle_at(int mount_fd, struct file_handle *handle, int flags)
@@ -342,25 +337,30 @@ int get_command_name(const char *pid, char *comm, size_t len)
 	return 0;
 }
 
-char *get_task_name(pid_t pid)
+int get_task_name(pid_t pid, char *name, size_t len)
 {
-	char *comm;
+	char path[PATH_MAX];
 	FILE *f;
 
 	if (!pid)
-		return NULL;
+		return -1;
 
-	if (asprintf(&comm, "/proc/%d/comm", pid) < 0)
-		return NULL;
+	if (snprintf(path, sizeof(path), "/proc/%d/comm", pid) >= sizeof(path))
+		return -1;
 
-	f = fopen(comm, "r");
+	f = fopen(path, "r");
 	if (!f)
-		return NULL;
+		return -1;
 
-	if (fscanf(f, "%ms\n", &comm) != 1)
-		comm = NULL;
+	if (!fgets(name, len, f)) {
+		fclose(f);
+		return -1;
+	}
+
+	/* comm ends in \n, get rid of it */
+	name[strcspn(name, "\n")] = '\0';
 
 	fclose(f);
 
-	return comm;
+	return 0;
 }

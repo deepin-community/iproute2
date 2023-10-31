@@ -1,10 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * ifstat.c	handy utility to read net interface statistics
- *
- *		This program is free software; you can redistribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
  *
  * Authors:	Alexey Kuznetsov, <kuznet@ms2.inr.ac.ru>
  */
@@ -202,7 +198,7 @@ static void load_info(void)
 		ll_init_map(&rth);
 		filter_mask = IFLA_STATS_FILTER_BIT(filter_type);
 		if (rtnl_statsdump_req_filter(&rth, AF_UNSPEC,
-					      filter_mask) < 0) {
+					      filter_mask, NULL, NULL) < 0) {
 			perror("Cannot send dump request");
 			exit(1);
 		}
@@ -612,7 +608,7 @@ static void update_db(int interval)
 				int i;
 
 				for (i = 0; i < MAXS; i++) {
-					if ((long)(h1->ival[i] - n->ival[i]) < 0) {
+					if (h1->ival[i] < n->ival[i]) {
 						memset(n->ival, 0, sizeof(n->ival));
 						break;
 					}

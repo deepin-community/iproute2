@@ -1,13 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * utils.c
  *
- *		This program is free software; you can redistribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
- *
  * Authors:	Alexey Kuznetsov, <kuznet@ms2.inr.ac.ru>
- *
  */
 
 #include <stdio.h>
@@ -101,7 +96,7 @@ out:
 	return -1;
 }
 
-int get_hex(char c)
+static int get_hex(char c)
 {
 	if (c >= 'A' && c <= 'F')
 		return c - 'A' + 10;
@@ -990,9 +985,8 @@ const char *rt_addr_n2a_r(int af, int len,
 			return inet_ntop(AF_INET6, &sa->sin6.sin6_addr,
 					 buf, buflen);
 		}
-
-		/* fallthrough */
 	}
+		/* fallthrough */
 	default:
 		return "???";
 	}
@@ -1294,7 +1288,7 @@ unsigned int print_name_and_link(const char *fmt,
 int cmdlineno;
 
 /* Like glibc getline but handle continuation lines and comments */
-ssize_t getcmdline(char **linep, size_t *lenp, FILE *in)
+static ssize_t getcmdline(char **linep, size_t *lenp, FILE *in)
 {
 	ssize_t cc;
 	char *cp;
@@ -1341,7 +1335,7 @@ ssize_t getcmdline(char **linep, size_t *lenp, FILE *in)
 }
 
 /* split command line into argument vector */
-int makeargs(char *line, char *argv[], int maxargs)
+static int makeargs(char *line, char *argv[], int maxargs)
 {
 	static const char ws[] = " \t\r\n";
 	char *cp = line;
@@ -1712,8 +1706,7 @@ int do_batch(const char *name, bool force,
 		}
 	}
 
-	if (line)
-		free(line);
+	free(line);
 
 	return ret;
 }
@@ -1924,4 +1917,38 @@ void print_indent(struct indent_mem *mem)
 {
 	if (mem->indent_level)
 		printf("%s", mem->indent_str);
+}
+
+const char *proto_n2a(unsigned short id, char *buf, int len,
+		      const struct proto *proto_tb, size_t tb_len)
+{
+	int i;
+
+	id = ntohs(id);
+
+	for (i = 0; !numeric && i < tb_len; i++) {
+		if (proto_tb[i].id == id)
+			return proto_tb[i].name;
+	}
+
+	snprintf(buf, len, "[%d]", id);
+
+	return buf;
+}
+
+int proto_a2n(unsigned short *id, const char *buf,
+	      const struct proto *proto_tb, size_t tb_len)
+{
+	int i;
+
+	for (i = 0; i < tb_len; i++) {
+		if (strcasecmp(proto_tb[i].name, buf) == 0) {
+			*id = htons(proto_tb[i].id);
+			return 0;
+		}
+	}
+	if (get_be16(id, buf, 0))
+		return -1;
+
+	return 0;
 }

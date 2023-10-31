@@ -1,13 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * tc_util.c		Misc TC utility functions.
  *
- *		This program is free software; you can redistribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
- *
  * Authors:	Alexey Kuznetsov, <kuznet@ms2.inr.ac.ru>
- *
  */
 
 #include <stdio.h>
@@ -33,7 +28,8 @@
 
 static struct db_names *cls_names;
 
-#define NAMES_DB "/etc/iproute2/tc_cls"
+#define NAMES_DB_USR CONF_USR_DIR "/tc_cls"
+#define NAMES_DB_ETC CONF_ETC_DIR "/tc_cls"
 
 int cls_names_init(char *path)
 {
@@ -43,11 +39,18 @@ int cls_names_init(char *path)
 	if (!cls_names)
 		return -1;
 
-	ret = db_names_load(cls_names, path ?: NAMES_DB);
-	if (ret == -ENOENT && path) {
-		fprintf(stderr, "Can't open class names file: %s\n", path);
-		return -1;
+	if (path) {
+		ret = db_names_load(cls_names, path);
+		if (ret == -ENOENT) {
+			fprintf(stderr, "Can't open class names file: %s\n", path);
+			return -1;
+		}
 	}
+
+	ret = db_names_load(cls_names, NAMES_DB_ETC);
+	if (ret == -ENOENT)
+		ret = db_names_load(cls_names, NAMES_DB_USR);
+
 	if (ret) {
 		db_names_free(cls_names);
 		cls_names = NULL;
@@ -74,7 +77,7 @@ const char *get_tc_lib(void)
 
 int get_qdisc_handle(__u32 *h, const char *str)
 {
-	__u32 maj;
+	unsigned long maj;
 	char *p;
 
 	maj = TC_H_UNSPEC;
@@ -93,7 +96,7 @@ ok:
 
 int get_tc_classid(__u32 *h, const char *str)
 {
-	__u32 maj, min;
+	unsigned long maj, min;
 	char *p;
 
 	maj = TC_H_ROOT;
@@ -247,7 +250,8 @@ int get_percent_rate64(__u64 *rate, const char *str, const char *dev)
 	return get_rate64(rate, r_str);
 }
 
-void tc_print_rate(enum output_type t, const char *key, const char *fmt,
+void __attribute__((format(printf, 3, 0)))
+tc_print_rate(enum output_type t, const char *key, const char *fmt,
 		   unsigned long long rate)
 {
 	print_rate(use_iec, t, key, fmt, rate);
@@ -462,7 +466,7 @@ static int parse_action_control_slash_spaces(int *argc_p, char ***argv_p,
 {
 	int argc = *argc_p;
 	char **argv = *argv_p;
-	int result1 = -1, result2;
+	int result1 = -1, result2 = -1;
 	int *result_p = &result1;
 	int ok = 0;
 	int ret;
@@ -475,8 +479,7 @@ static int parse_action_control_slash_spaces(int *argc_p, char ***argv_p,
 			result_p = &result2;
 			NEXT_ARG();
 			/* fall-through */
-		case 0: /* fall-through */
-		case 2:
+		case 0:
 			ret = parse_action_control(&argc, &argv,
 						   result_p, allow_num);
 			if (ret)
@@ -614,7 +617,7 @@ void print_tm(FILE *f, const struct tcf_t *tm)
 			   tm->expires / hz);
 }
 
-static void print_tcstats_basic_hw(struct rtattr **tbs, char *prefix)
+static void print_tcstats_basic_hw(struct rtattr **tbs, const char *prefix)
 {
 	struct gnet_stats_basic bs_hw;
 
@@ -652,7 +655,8 @@ static void print_tcstats_basic_hw(struct rtattr **tbs, char *prefix)
 	print_uint(PRINT_ANY, "hw_packets", " %u pkt", bs_hw.packets);
 }
 
-void print_tcstats2_attr(FILE *fp, struct rtattr *rta, char *prefix, struct rtattr **xstats)
+void print_tcstats2_attr(FILE *fp, struct rtattr *rta,
+			 const char *prefix, struct rtattr **xstats)
 {
 	struct rtattr *tbs[TCA_STATS_MAX + 1];
 
@@ -729,7 +733,7 @@ void print_tcstats2_attr(FILE *fp, struct rtattr *rta, char *prefix, struct rtat
 		*xstats = tbs[TCA_STATS_APP] ? : NULL;
 }
 
-void print_tcstats_attr(FILE *fp, struct rtattr *tb[], char *prefix,
+void print_tcstats_attr(FILE *fp, struct rtattr *tb[], const char *prefix,
 			struct rtattr **xstats)
 {
 	if (tb[TCA_STATS2]) {
@@ -782,10 +786,7 @@ static void print_masked_type(__u32 type_max,
 			      const char *name, struct rtattr *attr,
 			      struct rtattr *mask_attr, bool newline)
 {
-	SPRINT_BUF(namefrm);
 	__u32 value, mask;
-	SPRINT_BUF(out);
-	size_t done;
 
 	if (!attr)
 		return;
@@ -793,27 +794,18 @@ static void print_masked_type(__u32 type_max,
 	value = rta_getattr_type(attr);
 	mask = mask_attr ? rta_getattr_type(mask_attr) : type_max;
 
-	if (is_json_context()) {
-		sprintf(namefrm, "\n  %s %%u", name);
-		print_hu(PRINT_ANY, name, namefrm,
-			 rta_getattr_type(attr));
-		if (mask != type_max) {
-			char mask_name[SPRINT_BSIZE-6];
+	if (newline)
+		print_string(PRINT_FP, NULL, "%s  ", _SL_);
+	else
+		print_string(PRINT_FP, NULL, " ", _SL_);
 
-			sprintf(mask_name, "%s_mask", name);
-			if (newline)
-				print_string(PRINT_FP, NULL, "%s ", _SL_);
-			sprintf(namefrm, " %s %%u", mask_name);
-			print_hu(PRINT_ANY, mask_name, namefrm, mask);
-		}
-	} else {
-		done = sprintf(out, "%u", value);
-		if (mask != type_max)
-			sprintf(out + done, "/0x%x", mask);
-		if (newline)
-			print_string(PRINT_FP, NULL, "%s ", _SL_);
-		sprintf(namefrm, " %s %%s", name);
-		print_string(PRINT_ANY, name, namefrm, out);
+	print_uint_name_value(name, value);
+
+	if (mask != type_max) {
+		char mask_name[SPRINT_BSIZE-6];
+
+		snprintf(mask_name, sizeof(mask_name), "%s_mask", name);
+		print_hex(PRINT_ANY, mask_name, "/0x%x", mask);
 	}
 }
 
@@ -858,4 +850,13 @@ void print_masked_be16(const char *name, struct rtattr *attr,
 {
 	print_masked_type(UINT16_MAX, __rta_getattr_be16_u32, name, attr,
 			  mask_attr, newline);
+}
+
+void print_ext_msg(struct rtattr **tb)
+{
+	if (!tb[TCA_EXT_WARN_MSG])
+		return;
+
+	print_string(PRINT_ANY, "warn", "%s", rta_getattr_str(tb[TCA_EXT_WARN_MSG]));
+	print_nl();
 }
