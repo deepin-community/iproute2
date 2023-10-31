@@ -1,10 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * bpf_util.h	BPF common code
- *
- *		This program is free software; you can distribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
  *
  * Authors:	Daniel Borkmann <daniel@iogearbox.net>
  *		Jiri Pirko <jiri@resnulli.us>
@@ -68,6 +64,7 @@ enum bpf_mode {
 struct bpf_cfg_in {
 	const char *object;
 	const char *section;
+	const char *prog_name;
 	const char *uds;
 	enum bpf_prog_type type;
 	enum bpf_mode mode;
@@ -286,6 +283,8 @@ int bpf_prog_detach_fd(int target_fd, enum bpf_attach_type type);
 int bpf_program_attach(int prog_fd, int target_fd, enum bpf_attach_type type);
 
 int bpf_dump_prog_info(FILE *f, uint32_t id);
+
+int bpf(int cmd, union bpf_attr *attr, unsigned int size);
 
 #ifdef HAVE_ELF
 int bpf_send_map_fds(const char *path, const char *obj);

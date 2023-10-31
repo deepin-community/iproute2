@@ -1,13 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * iptunnel.c	       "ip tuntap"
  *
- *		This program is free software; you can redistribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
- *
  * Authors:	David Woodhouse <David.Woodhouse@intel.com>
- *
  */
 
 #include <stdio.h>
@@ -321,14 +316,16 @@ static void show_processes(const char *name)
 			} else if (err == 2 &&
 				   !strcmp("iff", key) &&
 				   !strcmp(name, value)) {
-				char *pname = get_task_name(pid);
+				SPRINT_BUF(pname);
 
-				print_string(PRINT_ANY, "name",
-					     "%s", pname ? : "<NULL>");
+				if (get_task_name(pid, pname, sizeof(pname)))
+					print_string(PRINT_ANY, "name",
+						     "%s", "<NULL>");
+				else
+					print_string(PRINT_ANY, "name",
+						     "%s", pname);
 
-				print_uint(PRINT_ANY, "pid",
-					   "(%d)", pid);
-				free(pname);
+				print_uint(PRINT_ANY, "pid", "(%d)", pid);
 			}
 
 			free(key);
@@ -444,6 +441,7 @@ static int do_show(int argc, char **argv)
 
 	if (rtnl_dump_filter(&rth, print_tuntap, NULL) < 0) {
 		fprintf(stderr, "Dump terminated\n");
+		delete_json_obj();
 		return -1;
 	}
 

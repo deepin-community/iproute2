@@ -1,10 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * link.c	TIPC link functionality.
- *
- *		This program is free software; you can redistribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
  *
  * Authors:	Richard Alpe <richard.alpe@ericsson.com>
  */
@@ -332,7 +328,7 @@ static int _show_link_stat(const char *name, struct nlattr *attrs[],
 	open_json_object(NULL);
 
 	print_string(PRINT_ANY, "link", "Link <%s>\n", name);
-	print_string(PRINT_JSON, "state", "", NULL);
+	print_string(PRINT_JSON, "state", NULL, NULL);
 	open_json_array(PRINT_JSON, NULL);
 	if (attrs[TIPC_NLA_LINK_ACTIVE])
 		print_string(PRINT_ANY, NULL, "  %s", "ACTIVE");

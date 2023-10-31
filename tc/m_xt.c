@@ -1,11 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * m_xt.c	xtables based targets
  *		utilities mostly ripped from iptables <duh, its the linux way>
- *
- *		This program is free software; you can distribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
  *
  * Authors:  J Hadi Salim (hadi@cyberus.ca)
  */
@@ -303,8 +299,7 @@ static int parse_ipt(struct action_util *a, int *argc_p,
 		m->tflags = 0;
 		m->used = 0;
 		/* Free allocated memory */
-		if (m->t)
-			free(m->t);
+		free(m->t);
 	}
 
 	return 0;

@@ -1,10 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * ipila.c	ILA (Identifier Locator Addressing) support
- *
- *              This program is free software; you can redistribute it and/or
- *              modify it under the terms of the GNU General Public License
- *              as published by the Free Software Foundation; either version
- *              2 of the License, or (at your option) any later version.
  *
  * Authors:	Tom Herbert <tom@herbertland.com>
  */
@@ -154,6 +150,7 @@ static int do_list(int argc, char **argv)
 	new_json_obj(json);
 	if (rtnl_dump_filter(&genl_rth, print_ila_mapping, stdout) < 0) {
 		fprintf(stderr, "Dump terminated\n");
+		delete_json_obj();
 		return 1;
 	}
 	delete_json_obj();

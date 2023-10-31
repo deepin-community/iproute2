@@ -36,9 +36,13 @@ extern int max_flush_loops;
 extern int batch_mode;
 extern int numeric;
 extern bool do_all;
+extern int echo_request;
 
-#ifndef CONFDIR
-#define CONFDIR		"/etc/iproute2"
+#ifndef CONF_USR_DIR
+#define CONF_USR_DIR "/usr/lib/iproute2"
+#endif
+#ifndef CONF_ETC_DIR
+#define CONF_ETC_DIR "/etc/iproute2"
 #endif
 
 #define SPRINT_BSIZE 64
@@ -138,7 +142,6 @@ int get_addr_rta(inet_prefix *dst, const struct rtattr *rta, int family);
 int get_addr_ila(__u64 *val, const char *arg);
 
 int read_prop(const char *dev, char *prop, long *value);
-int get_hex(char c);
 int get_integer(int *val, const char *arg, int base);
 int get_unsigned(unsigned *val, const char *arg, int base);
 int get_time_rtt(unsigned *val, const char *arg, int *raw);
@@ -198,8 +201,14 @@ bool matches(const char *prefix, const char *string);
 int inet_addr_match(const inet_prefix *a, const inet_prefix *b, int bits);
 int inet_addr_match_rta(const inet_prefix *m, const struct rtattr *rta);
 
+const char *ax25_ntop(int af, const void *addr, char *str, socklen_t len);
+
+const char *rose_ntop(int af, const void *addr, char *buf, socklen_t buflen);
+
 const char *mpls_ntop(int af, const void *addr, char *str, size_t len);
 int mpls_pton(int af, const char *src, void *addr, size_t alen);
+
+const char *netrom_ntop(int af, const void *addr, char *str, socklen_t len);
 
 extern int __iproute2_hz_internal;
 int __get_hz(void);
@@ -255,7 +264,9 @@ int print_timestamp(FILE *fp);
 void print_nlmsg_timestamp(FILE *fp, const struct nlmsghdr *n);
 
 unsigned int print_name_and_link(const char *fmt,
-				 const char *name, struct rtattr *tb[]);
+				 const char *name, struct rtattr *tb[])
+	__attribute__((format(printf, 1, 0)));
+
 
 #define BIT(nr)                 (UINT64_C(1) << (nr))
 
@@ -275,6 +286,14 @@ unsigned int print_name_and_link(const char *fmt,
 	_min1 < _min2 ? _min1 : _min2; })
 #endif
 
+#ifndef max
+# define max(x, y) ({			\
+	typeof(x) _max1 = (x);		\
+	typeof(y) _max2 = (y);		\
+	(void) (&_max1 == &_max2);	\
+	_max1 < _max2 ? _max2 : _max1; })
+#endif
+
 #ifndef __check_format_string
 # define __check_format_string(pos_str, pos_args) \
 	__attribute__ ((format (printf, (pos_str), (pos_args))))
@@ -287,8 +306,6 @@ unsigned int print_name_and_link(const char *fmt,
 #define ntohll(x) ((1==ntohl(1)) ? (x) : ((uint64_t)ntohl((x) & 0xFFFFFFFF) << 32) | ntohl((x) >> 32))
 
 extern int cmdlineno;
-ssize_t getcmdline(char **line, size_t *len, FILE *in);
-int makeargs(char *line, char *argv[], int maxargs);
 
 char *int_to_str(int val, char *buf);
 int get_guid(__u64 *guid, const char *arg);
@@ -301,7 +318,7 @@ char *find_cgroup2_mount(bool do_mount);
 __u64 get_cgroup2_id(const char *path);
 char *get_cgroup2_path(__u64 id, bool full);
 int get_command_name(const char *pid, char *comm, size_t len);
-char *get_task_name(pid_t pid);
+int get_task_name(pid_t pid, char *name, size_t len);
 
 int get_rtnl_link_stats_rta(struct rtnl_link_stats64 *stats64,
 			    struct rtattr *tb[]);
@@ -360,5 +377,15 @@ void free_indent_mem(struct indent_mem *mem);
 void inc_indent(struct indent_mem *mem);
 void dec_indent(struct indent_mem *mem);
 void print_indent(struct indent_mem *mem);
+
+struct proto {
+	int id;
+	const char *name;
+};
+
+int proto_a2n(unsigned short *id, const char *buf,
+	      const struct proto *proto_tb, size_t tb_len);
+const char *proto_n2a(unsigned short id, char *buf, int len,
+		      const struct proto *proto_tb, size_t tb_len);
 
 #endif /* __UTILS_H__ */

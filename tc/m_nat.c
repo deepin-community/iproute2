@@ -1,13 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * m_nat.c		NAT module
  *
- *		This program is free software; you can distribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
- *
  * Authors:	Herbert Xu <herbert@gondor.apana.org.au>
- *
  */
 
 #include <stdio.h>
@@ -93,7 +88,9 @@ parse_nat(struct action_util *a, int *argc_p, char ***argv_p, int tca_id, struct
 	while (argc > 0) {
 		if (matches(*argv, "nat") == 0) {
 			NEXT_ARG();
-			if (parse_nat_args(&argc, &argv, &sel)) {
+			if (strcmp(*argv, "index") == 0) {
+				goto skip_args;
+			} else if (parse_nat_args(&argc, &argv, &sel)) {
 				fprintf(stderr, "Illegal nat construct (%s)\n",
 					*argv);
 				explain();
@@ -118,6 +115,7 @@ parse_nat(struct action_util *a, int *argc_p, char ***argv_p, int tca_id, struct
 
 	if (argc) {
 		if (matches(*argv, "index") == 0) {
+skip_args:
 			NEXT_ARG();
 			if (get_u32(&sel.index, *argv, 10)) {
 				fprintf(stderr, "Nat: Illegal \"index\"\n");
