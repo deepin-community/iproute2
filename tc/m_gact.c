@@ -18,7 +18,7 @@
 #include "tc_util.h"
 #include <linux/tc_act/tc_gact.h>
 
-/* define to turn on probablity stuff */
+/* define to turn on probability stuff */
 
 #ifdef CONFIG_GACT_PROB
 static const char *prob_n2a(int p)
@@ -66,7 +66,7 @@ usage(void)
 }
 
 static int
-parse_gact(struct action_util *a, int *argc_p, char ***argv_p,
+parse_gact(const struct action_util *a, int *argc_p, char ***argv_p,
 	   int tca_id, struct nlmsghdr *n)
 {
 	int argc = *argc_p;
@@ -157,7 +157,7 @@ skip_args:
 }
 
 static int
-print_gact(struct action_util *au, FILE *f, struct rtattr *arg)
+print_gact(const struct action_util *au, FILE *f, struct rtattr *arg)
 {
 #ifdef CONFIG_GACT_PROB
 	struct tc_gact_p *pp = NULL;

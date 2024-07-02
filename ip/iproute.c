@@ -61,12 +61,13 @@ static void usage(void)
 		"       ip route save SELECTOR\n"
 		"       ip route restore\n"
 		"       ip route showdump\n"
-		"       ip route get [ ROUTE_GET_FLAGS ] ADDRESS\n"
+		"       ip route get [ ROUTE_GET_FLAGS ] [ to ] ADDRESS\n"
 		"                            [ from ADDRESS iif STRING ]\n"
 		"                            [ oif STRING ] [ tos TOS ]\n"
 		"                            [ mark NUMBER ] [ vrf NAME ]\n"
 		"                            [ uid NUMBER ] [ ipproto PROTOCOL ]\n"
 		"                            [ sport NUMBER ] [ dport NUMBER ]\n"
+		"                            [ as ADDRESS ]\n"
 		"       ip route { add | del | change | append | replace } ROUTE\n"
 		"SELECTOR := [ root PREFIX ] [ match PREFIX ] [ exact PREFIX ]\n"
 		"            [ table TABLE_ID ] [ vrf NAME ] [ proto RTPROTO ]\n"
@@ -112,7 +113,8 @@ static void usage(void)
 		"FLAVOR := { psp | usp | usd | next-csid }\n"
 		"IOAM6HDR := trace prealloc type IOAM6_TRACE_TYPE ns IOAM6_NAMESPACE size IOAM6_TRACE_SIZE\n"
 		"XFRMINFO := if_id IF_ID [ link_dev LINK ]\n"
-		"ROUTE_GET_FLAGS := [ fibmatch ]\n");
+		"ROUTE_GET_FLAGS := ROUTE_GET_FLAG [ ROUTE_GET_FLAGS ]\n"
+		"ROUTE_GET_FLAG := [ connected | fibmatch | notify ]\n");
 	exit(-1);
 }
 
@@ -349,6 +351,11 @@ static void print_rtax_features(FILE *fp, unsigned int features)
 	if (features & RTAX_FEATURE_ECN) {
 		print_null(PRINT_ANY, "ecn", "ecn ", NULL);
 		features &= ~RTAX_FEATURE_ECN;
+	}
+
+	if (features & RTAX_FEATURE_TCP_USEC_TS) {
+		print_null(PRINT_ANY, "tcp_usec_ts", "tcp_usec_ts ", NULL);
+		features &= ~RTAX_FEATURE_TCP_USEC_TS;
 	}
 
 	if (features)
@@ -1349,6 +1356,8 @@ static int iproute_modify(int cmd, unsigned int flags, int argc, char **argv)
 
 				if (strcmp(*argv, "ecn") == 0)
 					features |= RTAX_FEATURE_ECN;
+				else if (strcmp(*argv, "tcp_usec_ts") == 0)
+					features |= RTAX_FEATURE_TCP_USEC_TS;
 				else
 					invarg("\"features\" value not valid\n", *argv);
 				break;

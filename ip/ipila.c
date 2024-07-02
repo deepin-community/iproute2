@@ -47,19 +47,24 @@ static int genl_family = -1;
 
 static void print_addr64(__u64 addr, char *buff, size_t len)
 {
-	__u16 *words = (__u16 *)&addr;
+	union {
+		__u64 id64;
+		__u16 words[4];
+	} id = { .id64 = addr };
 	__u16 v;
 	int i, ret;
 	size_t written = 0;
 	char *sep = ":";
 
 	for (i = 0; i < 4; i++) {
-		v = ntohs(words[i]);
+		v = ntohs(id.words[i]);
 
 		if (i == 3)
 			sep = "";
 
 		ret = snprintf(&buff[written], len - written, "%x%s", v, sep);
+		if (ret < 0 || ret >= len - written)
+			break;
 		written += ret;
 	}
 }
@@ -296,7 +301,9 @@ int do_ipila(int argc, char **argv)
 		return do_add(argc-1, argv+1);
 	if (matches(*argv, "delete") == 0)
 		return do_del(argc-1, argv+1);
-	if (matches(*argv, "list") == 0)
+	if (matches(*argv, "show") == 0 ||
+	    matches(*argv, "lst") == 0 ||
+	    matches(*argv, "list") == 0)
 		return do_list(argc-1, argv+1);
 
 	fprintf(stderr, "Command \"%s\" is unknown, try \"ip ila help\".\n",

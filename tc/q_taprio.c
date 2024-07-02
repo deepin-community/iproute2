@@ -29,18 +29,6 @@ struct sched_entry {
 	uint8_t cmd;
 };
 
-#define CLOCKID_INVALID (-1)
-static const struct static_clockid {
-	const char *name;
-	clockid_t clockid;
-} clockids_sysv[] = {
-	{ "REALTIME", CLOCK_REALTIME },
-	{ "TAI", CLOCK_TAI },
-	{ "BOOTTIME", CLOCK_BOOTTIME },
-	{ "MONOTONIC", CLOCK_MONOTONIC },
-	{ NULL }
-};
-
 static void explain(void)
 {
 	fprintf(stderr,
@@ -58,37 +46,6 @@ static void explain_clockid(const char *val)
 {
 	fprintf(stderr, "taprio: illegal value for \"clockid\": \"%s\".\n", val);
 	fprintf(stderr, "It must be a valid SYS-V id (i.e. CLOCK_TAI)\n");
-}
-
-static int get_clockid(__s32 *val, const char *arg)
-{
-	const struct static_clockid *c;
-
-	/* Drop the CLOCK_ prefix if that is being used. */
-	if (strcasestr(arg, "CLOCK_") != NULL)
-		arg += sizeof("CLOCK_") - 1;
-
-	for (c = clockids_sysv; c->name; c++) {
-		if (strcasecmp(c->name, arg) == 0) {
-			*val = c->clockid;
-
-			return 0;
-		}
-	}
-
-	return -1;
-}
-
-static const char* get_clock_name(clockid_t clockid)
-{
-	const struct static_clockid *c;
-
-	for (c = clockids_sysv; c->name; c++) {
-		if (clockid == c->clockid)
-			return c->name;
-	}
-
-	return "invalid";
 }
 
 static const char *entry_cmd_to_str(__u8 cmd)
@@ -177,7 +134,7 @@ static void add_tc_entries(struct nlmsghdr *n, __u32 max_sdu[TC_QOPT_MAX_QUEUE],
 	}
 }
 
-static int taprio_parse_opt(struct qdisc_util *qu, int argc,
+static int taprio_parse_opt(const struct qdisc_util *qu, int argc,
 			    char **argv, struct nlmsghdr *n, const char *dev)
 {
 	__u32 max_sdu[TC_QOPT_MAX_QUEUE] = { };
@@ -588,7 +545,7 @@ static void dump_tc_entries(FILE *f, struct rtattr *opt)
 	}
 }
 
-static int taprio_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
+static int taprio_print_opt(const struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 {
 	struct rtattr *tb[TCA_TAPRIO_ATTR_MAX + 1];
 	struct tc_mqprio_qopt *qopt = 0;
@@ -666,7 +623,7 @@ static int taprio_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	return 0;
 }
 
-static int taprio_print_xstats(struct qdisc_util *qu, FILE *f,
+static int taprio_print_xstats(const struct qdisc_util *qu, FILE *f,
 			       struct rtattr *xstats)
 {
 	struct rtattr *tb[TCA_TAPRIO_OFFLOAD_STATS_MAX + 1], *nla;

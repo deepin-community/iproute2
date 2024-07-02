@@ -620,14 +620,14 @@ static int pedit_keys_ex_addattr(struct m_pedit_sel *sel, struct nlmsghdr *n)
 	return 0;
 }
 
-static int parse_pedit(struct action_util *a, int *argc_p, char ***argv_p,
+static int parse_pedit(const struct action_util *a, int *argc_p, char ***argv_p,
 		       int tca_id, struct nlmsghdr *n)
 {
 	struct m_pedit_sel sel = {};
 
 	int argc = *argc_p;
 	char **argv = *argv_p;
-	int ok = 0, iok = 0;
+	int ok = 0;
 	struct rtattr *tail;
 
 	while (argc > 0) {
@@ -689,7 +689,6 @@ static int parse_pedit(struct action_util *a, int *argc_p, char ***argv_p,
 			}
 			argc--;
 			argv++;
-			iok++;
 		}
 	}
 
@@ -746,7 +745,7 @@ static int print_pedit_location(FILE *f,
 	return 0;
 }
 
-static int print_pedit(struct action_util *au, FILE *f, struct rtattr *arg)
+static int print_pedit(const struct action_util *au, FILE *f, struct rtattr *arg)
 {
 	struct tc_pedit_sel *sel;
 	struct rtattr *tb[TCA_PEDIT_MAX + 1];
@@ -772,20 +771,20 @@ static int print_pedit(struct action_util *au, FILE *f, struct rtattr *arg)
 		sel = RTA_DATA(tb[TCA_PEDIT_PARMS_EX]);
 
 		if (!tb[TCA_PEDIT_KEYS_EX]) {
-			fprintf(f, "Netlink error\n");
+			fprintf(stderr, "Netlink error\n");
 			return -1;
 		}
 
 		keys_ex = calloc(sel->nkeys, sizeof(*keys_ex));
 		if (!keys_ex) {
-			fprintf(f, "Out of memory\n");
+			fprintf(stderr, "Out of memory\n");
 			return -1;
 		}
 
 		err = pedit_keys_ex_getattr(tb[TCA_PEDIT_KEYS_EX], keys_ex,
 					    sel->nkeys);
 		if (err) {
-			fprintf(f, "Netlink error\n");
+			fprintf(stderr, "Netlink error\n");
 
 			free(keys_ex);
 			return -1;

@@ -33,7 +33,7 @@ static int usage(void)
 		"\n"
 		"       tc qdisc { show | list } [ dev STRING ] [ QDISC_ID ] [ invisible ]\n"
 		"Where:\n"
-		"QDISC_KIND := { [p|b]fifo | tbf | prio | cbq | red | etc. }\n"
+		"QDISC_KIND := { [p|b]fifo | tbf | prio | red | etc. }\n"
 		"OPTIONS := ... try tc qdisc add <desired QDISC_KIND> help\n"
 		"STAB_OPTIONS := ... try tc qdisc add stab help\n"
 		"QDISC_ID := { root | ingress | handle QHANDLE | parent CLASSID }\n");
@@ -42,7 +42,7 @@ static int usage(void)
 
 static int tc_qdisc_modify(int cmd, unsigned int flags, int argc, char **argv)
 {
-	struct qdisc_util *q = NULL;
+	const struct qdisc_util *q = NULL;
 	struct tc_estimator est = {};
 	struct {
 		struct tc_sizespec	szopts;
@@ -217,7 +217,7 @@ int print_qdisc(struct nlmsghdr *n, void *arg)
 	struct tcmsg *t = NLMSG_DATA(n);
 	int len = n->nlmsg_len;
 	struct rtattr *tb[TCA_MAX+1];
-	struct qdisc_util *q;
+	const struct qdisc_util *q;
 	char abuf[256];
 
 	if (n->nlmsg_type != RTM_NEWQDISC && n->nlmsg_type != RTM_DELQDISC) {
@@ -476,7 +476,7 @@ static int tc_qdisc_block_exists_cb(struct nlmsghdr *n, void *arg)
 	struct tcmsg *t = NLMSG_DATA(n);
 	struct rtattr *tb[TCA_MAX+1];
 	int len = n->nlmsg_len;
-	struct qdisc_util *q;
+	const struct qdisc_util *q;
 	const char *kind;
 	int err;
 

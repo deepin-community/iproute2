@@ -7,6 +7,7 @@
  *
  */
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -87,6 +88,7 @@ static char *sprint_u32_handle(__u32 handle, char *buf)
 	if (htid) {
 		int l = snprintf(b, bsize, "%x:", htid>>20);
 
+		assert(l > 0 && l < bsize);
 		bsize -= l;
 		b += l;
 	}
@@ -94,12 +96,14 @@ static char *sprint_u32_handle(__u32 handle, char *buf)
 		if (hash) {
 			int l = snprintf(b, bsize, "%x", hash);
 
+			assert(l > 0 && l < bsize);
 			bsize -= l;
 			b += l;
 		}
 		if (nodeid) {
 			int l = snprintf(b, bsize, ":%x", nodeid);
 
+			assert(l > 0 && l < bsize);
 			bsize -= l;
 			b += l;
 		}
@@ -659,7 +663,7 @@ static int parse_mark(int *argc_p, char ***argv_p, struct nlmsghdr *n)
 	struct tc_u32_mark mark;
 
 	if (argc <= 1)
-		return -1;
+		missarg("mark");
 
 	if (get_u32(&mark.val, *argv, 0)) {
 		fprintf(stderr, "Illegal \"mark\" value\n");
@@ -1014,7 +1018,7 @@ static __u32 u32_hash_fold(struct tc_u32_key *key)
 	return ntohl(key->val & key->mask) >> fshift;
 }
 
-static int u32_parse_opt(struct filter_util *qu, char *handle,
+static int u32_parse_opt(const struct filter_util *qu, char *handle,
 			 int argc, char **argv, struct nlmsghdr *n)
 {
 	struct {
@@ -1228,7 +1232,7 @@ static int u32_parse_opt(struct filter_util *qu, char *handle,
 	return 0;
 }
 
-static int u32_print_opt(struct filter_util *qu, FILE *f, struct rtattr *opt,
+static int u32_print_opt(const struct filter_util *qu, FILE *f, struct rtattr *opt,
 			 __u32 handle)
 {
 	struct rtattr *tb[TCA_U32_MAX + 1];
@@ -1300,7 +1304,7 @@ static int u32_print_opt(struct filter_util *qu, FILE *f, struct rtattr *opt,
 
 	if (tb[TCA_U32_PCNT]) {
 		if (RTA_PAYLOAD(tb[TCA_U32_PCNT])  < sizeof(*pf)) {
-			fprintf(f, "Broken perf counters\n");
+			fprintf(stderr, "Broken perf counters\n");
 			return -1;
 		}
 		pf = RTA_DATA(tb[TCA_U32_PCNT]);
@@ -1315,7 +1319,7 @@ static int u32_print_opt(struct filter_util *qu, FILE *f, struct rtattr *opt,
 		struct tc_u32_mark *mark = RTA_DATA(tb[TCA_U32_MARK]);
 
 		if (RTA_PAYLOAD(tb[TCA_U32_MARK]) < sizeof(*mark)) {
-			fprintf(f, "\n  Invalid mark (kernel&iproute2 mismatch)\n");
+			fprintf(stderr, "Invalid mark (kernel&iproute2 mismatch)\n");
 		} else {
 			print_nl();
 			print_0xhex(PRINT_ANY, "fwmark_value", "  mark 0x%04x ", mark->val);
@@ -1338,7 +1342,7 @@ static int u32_print_opt(struct filter_util *qu, FILE *f, struct rtattr *opt,
 
 		if (sel->flags & (TC_U32_VAROFFSET | TC_U32_OFFSET)) {
 			print_nl();
-			print_string(PRINT_ANY, NULL, "%s", "    offset ");
+			print_string(PRINT_FP, NULL, "    offset ", NULL);
 			if (sel->flags & TC_U32_VAROFFSET) {
 				print_hex(PRINT_ANY, "offset_mask", "%04x", ntohs(sel->offmask));
 				print_int(PRINT_ANY, "offset_shift", ">>%d ", sel->offshift);
