@@ -35,9 +35,10 @@ int use_iec;
 int force;
 bool use_names;
 int json;
-int color;
 int oneline;
 int brief;
+
+int echo_request;
 
 static char *conf_file;
 
@@ -47,7 +48,7 @@ static void *BODY;	/* cached handle dlopen(NULL) */
 static struct qdisc_util *qdisc_list;
 static struct filter_util *filter_list;
 
-static int print_noqopt(struct qdisc_util *qu, FILE *f,
+static int print_noqopt(const struct qdisc_util *qu, FILE *f,
 			struct rtattr *opt)
 {
 	if (opt && RTA_PAYLOAD(opt))
@@ -56,7 +57,7 @@ static int print_noqopt(struct qdisc_util *qu, FILE *f,
 	return 0;
 }
 
-static int parse_noqopt(struct qdisc_util *qu, int argc, char **argv,
+static int parse_noqopt(const struct qdisc_util *qu, int argc, char **argv,
 			struct nlmsghdr *n, const char *dev)
 {
 	if (argc) {
@@ -68,7 +69,7 @@ static int parse_noqopt(struct qdisc_util *qu, int argc, char **argv,
 	return 0;
 }
 
-static int print_nofopt(struct filter_util *qu, FILE *f, struct rtattr *opt, __u32 fhandle)
+static int print_nofopt(const struct filter_util *qu, FILE *f, struct rtattr *opt, __u32 fhandle)
 {
 	if (opt && RTA_PAYLOAD(opt))
 		fprintf(f, "fh %08x [Unknown filter, optlen=%u] ",
@@ -78,7 +79,7 @@ static int print_nofopt(struct filter_util *qu, FILE *f, struct rtattr *opt, __u
 	return 0;
 }
 
-static int parse_nofopt(struct filter_util *qu, char *fhandle,
+static int parse_nofopt(const struct filter_util *qu, char *fhandle,
 			int argc, char **argv, struct nlmsghdr *n)
 {
 	__u32 handle;
@@ -101,7 +102,7 @@ static int parse_nofopt(struct filter_util *qu, char *fhandle,
 	return 0;
 }
 
-struct qdisc_util *get_qdisc_kind(const char *str)
+const struct qdisc_util *get_qdisc_kind(const char *str)
 {
 	void *dlh;
 	char buf[256];
@@ -145,7 +146,7 @@ noexist:
 }
 
 
-struct filter_util *get_filter_kind(const char *str)
+const struct filter_util *get_filter_kind(const char *str)
 {
 	void *dlh;
 	char buf[256];
@@ -197,7 +198,7 @@ static void usage(void)
 		"		    -o[neline] | -j[son] | -p[retty] | -c[olor]\n"
 		"		    -b[atch] [filename] | -n[etns] name | -N[umeric] |\n"
 		"		     -nm | -nam[es] | { -cf | -conf } path\n"
-		"		     -br[ief] }\n");
+		"		     -br[ief] | -echo }\n");
 }
 
 static int do_cmd(int argc, char **argv)
@@ -254,6 +255,7 @@ int main(int argc, char **argv)
 {
 	const char *libbpf_version;
 	char *batch_file = NULL;
+	int color = CONF_COLOR;
 	int ret;
 
 	while (argc > 1) {
@@ -287,7 +289,7 @@ int main(int argc, char **argv)
 		} else if (matches(argv[1], "-batch") == 0) {
 			argc--;	argv++;
 			if (argc <= 1)
-				usage();
+				missarg("batch file");
 			batch_file = argv[1];
 		} else if (matches(argv[1], "-netns") == 0) {
 			NEXT_ARG();
@@ -312,8 +314,10 @@ int main(int argc, char **argv)
 			++json;
 		} else if (matches(argv[1], "-oneline") == 0) {
 			++oneline;
-		}else if (matches(argv[1], "-brief") == 0) {
+		} else if (matches(argv[1], "-brief") == 0) {
 			++brief;
+		} else if (strcmp(argv[1], "-echo") == 0) {
+			++echo_request;
 		} else {
 			fprintf(stderr,
 				"Option \"%s\" is unknown, try \"tc -help\".\n",

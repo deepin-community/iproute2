@@ -41,7 +41,7 @@ static void act_usage(void)
 	 */
 	fprintf(stderr,
 		"usage: tc actions <ACTSPECOP>*\n"
-		"Where: 	ACTSPECOP := ACR | GD | FL\n"
+		"Where:		ACTSPECOP := ACR | GD | FL\n"
 		"	ACR := add | change | replace <ACTSPEC>*\n"
 		"	GD := get | delete | <ACTISPEC>*\n"
 		"	FL := ls | list | flush | <ACTNAMESPEC>\n"
@@ -59,15 +59,15 @@ static void act_usage(void)
 	exit(-1);
 }
 
-static int print_noaopt(struct action_util *au, FILE *f, struct rtattr *opt)
+static int print_noaopt(const struct action_util *au, FILE *f, struct rtattr *opt)
 {
 	if (opt && RTA_PAYLOAD(opt))
-		fprintf(f, "[Unknown action, optlen=%u] ",
+		fprintf(stderr, "[Unknown action, optlen=%u] ",
 			(unsigned int) RTA_PAYLOAD(opt));
 	return 0;
 }
 
-static int parse_noaopt(struct action_util *au, int *argc_p,
+static int parse_noaopt(const struct action_util *au, int *argc_p,
 			char ***argv_p, int code, struct nlmsghdr *n)
 {
 	int argc = *argc_p;
@@ -688,7 +688,16 @@ static int tc_action_gd(int cmd, unsigned int flags,
 
 	req.n.nlmsg_seq = rth.dump = ++rth.seq;
 
-	if (rtnl_talk(&rth, &req.n, cmd == RTM_DELACTION ? NULL : &ans) < 0) {
+	if (cmd == RTM_DELACTION) {
+		if (echo_request)
+			ret = rtnl_echo_talk(&rth, &req.n, json, print_action);
+		else
+			ret = rtnl_talk(&rth, &req.n, NULL);
+	} else {
+		ret = rtnl_talk(&rth, &req.n, &ans);
+	}
+
+	if (ret < 0) {
 		fprintf(stderr, "We have an error talking to the kernel\n");
 		return 1;
 	}
@@ -738,7 +747,12 @@ static int tc_action_modify(int cmd, unsigned int flags,
 	}
 	tail->rta_len = (void *) NLMSG_TAIL(&req.n) - (void *) tail;
 
-	if (rtnl_talk(&rth, &req.n, NULL) < 0) {
+	if (echo_request)
+		ret = rtnl_echo_talk(&rth, &req.n, json, print_action);
+	else
+		ret = rtnl_talk(&rth, &req.n, NULL);
+
+	if (ret < 0) {
 		fprintf(stderr, "We have an error talking to the kernel\n");
 		ret = -1;
 	}
@@ -836,7 +850,12 @@ static int tc_act_list_or_flush(int *argc_p, char ***argv_p, int event)
 		req.n.nlmsg_type = RTM_DELACTION;
 		req.n.nlmsg_flags |= NLM_F_ROOT;
 		req.n.nlmsg_flags |= NLM_F_REQUEST;
-		if (rtnl_talk(&rth, &req.n, NULL) < 0) {
+
+		if (echo_request)
+			ret = rtnl_echo_talk(&rth, &req.n, json, print_action);
+		else
+			ret = rtnl_talk(&rth, &req.n, NULL);
+		if (ret < 0) {
 			fprintf(stderr, "We have an error flushing\n");
 			return 1;
 		}

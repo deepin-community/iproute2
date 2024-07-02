@@ -53,7 +53,7 @@ static void explain1(char *arg)
 	explain();
 }
 
-static int htb_parse_opt(struct qdisc_util *qu, int argc,
+static int htb_parse_opt(const struct qdisc_util *qu, int argc,
 			 char **argv, struct nlmsghdr *n, const char *dev)
 {
 	unsigned int direct_qlen = ~0U;
@@ -107,7 +107,7 @@ static int htb_parse_opt(struct qdisc_util *qu, int argc,
 	return 0;
 }
 
-static int htb_parse_class_opt(struct qdisc_util *qu, int argc, char **argv,
+static int htb_parse_class_opt(const struct qdisc_util *qu, int argc, char **argv,
 			       struct nlmsghdr *n, const char *dev)
 {
 	struct tc_htb_opt opt = {};
@@ -224,7 +224,7 @@ static int htb_parse_class_opt(struct qdisc_util *qu, int argc, char **argv,
 	opt.ceil.rate = (ceil64 >= (1ULL << 32)) ? ~0U : ceil64;
 
 	/* compute minimal allowed burst from rate; mtu is added here to make
-	   sute that buffer is larger than mtu and to have some safeguard space */
+	   sure that buffer is larger than mtu and to have some safeguard space */
 	if (!buffer)
 		buffer = rate64 / get_hz() + mtu;
 	if (!cbuffer)
@@ -263,7 +263,7 @@ static int htb_parse_class_opt(struct qdisc_util *qu, int argc, char **argv,
 	return 0;
 }
 
-static int htb_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
+static int htb_print_opt(const struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 {
 	struct rtattr *tb[TCA_HTB_MAX + 1];
 	struct tc_htb_opt *hopt;
@@ -354,7 +354,7 @@ static int htb_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	return 0;
 }
 
-static int htb_print_xstats(struct qdisc_util *qu, FILE *f, struct rtattr *xstats)
+static int htb_print_xstats(const struct qdisc_util *qu, FILE *f, struct rtattr *xstats)
 {
 	struct tc_htb_xstats *st;
 

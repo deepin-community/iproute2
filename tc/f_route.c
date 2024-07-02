@@ -30,7 +30,7 @@ static void explain(void)
 		"NOTE: CLASSID is parsed as hexadecimal input.\n");
 }
 
-static int route_parse_opt(struct filter_util *qu, char *handle, int argc, char **argv, struct nlmsghdr *n)
+static int route_parse_opt(const struct filter_util *qu, char *handle, int argc, char **argv, struct nlmsghdr *n)
 {
 	struct tcmsg *t = NLMSG_DATA(n);
 	struct rtattr *tail;
@@ -134,7 +134,7 @@ static int route_parse_opt(struct filter_util *qu, char *handle, int argc, char 
 	return 0;
 }
 
-static int route_print_opt(struct filter_util *qu, FILE *f, struct rtattr *opt, __u32 handle)
+static int route_print_opt(const struct filter_util *qu, FILE *f, struct rtattr *opt, __u32 handle)
 {
 	struct rtattr *tb[TCA_ROUTE4_MAX+1];
 
@@ -146,20 +146,24 @@ static int route_print_opt(struct filter_util *qu, FILE *f, struct rtattr *opt, 
 	parse_rtattr_nested(tb, TCA_ROUTE4_MAX, opt);
 
 	if (handle)
-		fprintf(f, "fh 0x%08x ", handle);
+		print_0xhex(PRINT_ANY, "fh", "fh 0x%08x ", handle);
 	if (handle&0x7F00)
-		fprintf(f, "order %d ", (handle>>8)&0x7F);
+		print_uint(PRINT_ANY, "order", "order %d ", (handle >> 8) & 0x7F);
 
 	if (tb[TCA_ROUTE4_CLASSID]) {
 		SPRINT_BUF(b1);
-		fprintf(f, "flowid %s ", sprint_tc_classid(rta_getattr_u32(tb[TCA_ROUTE4_CLASSID]), b1));
+		print_string(PRINT_ANY, "flowid", "flowid %s ",
+			     sprint_tc_classid(rta_getattr_u32(tb[TCA_ROUTE4_CLASSID]), b1));
 	}
 	if (tb[TCA_ROUTE4_TO])
-		fprintf(f, "to %s ", rtnl_rtrealm_n2a(rta_getattr_u32(tb[TCA_ROUTE4_TO]), b1, sizeof(b1)));
+		print_string(PRINT_ANY, "name", "to %s ",
+			rtnl_rtrealm_n2a(rta_getattr_u32(tb[TCA_ROUTE4_TO]), b1, sizeof(b1)));
 	if (tb[TCA_ROUTE4_FROM])
-		fprintf(f, "from %s ", rtnl_rtrealm_n2a(rta_getattr_u32(tb[TCA_ROUTE4_FROM]), b1, sizeof(b1)));
+		print_string(PRINT_ANY, "name", "from %s ",
+			rtnl_rtrealm_n2a(rta_getattr_u32(tb[TCA_ROUTE4_FROM]), b1, sizeof(b1)));
 	if (tb[TCA_ROUTE4_IIF])
-		fprintf(f, "fromif %s", ll_index_to_name(rta_getattr_u32(tb[TCA_ROUTE4_IIF])));
+		print_color_string(PRINT_ANY, COLOR_IFNAME, "fromif", "fromif %s",
+			ll_index_to_name(rta_getattr_u32(tb[TCA_ROUTE4_IIF])));
 	if (tb[TCA_ROUTE4_POLICE])
 		tc_print_police(f, tb[TCA_ROUTE4_POLICE]);
 	if (tb[TCA_ROUTE4_ACT])

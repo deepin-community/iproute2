@@ -61,16 +61,16 @@ static void usage(void)
 	fprintf(stderr,
 		"Usage: ip [ OPTIONS ] OBJECT { COMMAND | help }\n"
 		"       ip [ -force ] -batch filename\n"
-		"where  OBJECT := { address | addrlabel | amt | fou | help | ila | ioam | l2tp |\n"
-		"                   link | macsec | maddress | monitor | mptcp | mroute | mrule |\n"
+		"where  OBJECT := { address | addrlabel | fou | help | ila | ioam | l2tp | link |\n"
+		"                   macsec | maddress | monitor | mptcp | mroute | mrule |\n"
 		"                   neighbor | neighbour | netconf | netns | nexthop | ntable |\n"
-		"                   ntbl | route | rule | sr | tap | tcpmetrics |\n"
+		"                   ntbl | route | rule | sr | stats | tap | tcpmetrics |\n"
 		"                   token | tunnel | tuntap | vrf | xfrm }\n"
 		"       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[esolve] |\n"
 		"                    -h[uman-readable] | -iec | -j[son] | -p[retty] |\n"
 		"                    -f[amily] { inet | inet6 | mpls | bridge | link } |\n"
 		"                    -4 | -6 | -M | -B | -0 |\n"
-		"                    -l[oops] { maximum-addr-flush-attempts } | -br[ief] |\n"
+		"                    -l[oops] { maximum-addr-flush-attempts } | -echo | -br[ief] |\n"
 		"                    -o[neline] | -t[imestamp] | -ts[hort] | -b[atch] [filename] |\n"
 		"                    -rc[vbuf] [size] | -n[etns] name | -N[umeric] | -a[ll] |\n"
 		"                    -c[olor]}\n");
@@ -168,7 +168,7 @@ int main(int argc, char **argv)
 	const char *libbpf_version;
 	char *batch_file = NULL;
 	char *basename;
-	int color = 0;
+	int color = CONF_COLOR;
 
 	/* to run vrf exec without root, capabilities might be set, drop them
 	 * if not needed as the first thing.
@@ -203,15 +203,15 @@ int main(int argc, char **argv)
 			argc--;
 			argv++;
 			if (argc <= 1)
-				usage();
+				missarg("loop count");
 			max_flush_loops = atoi(argv[1]);
 		} else if (matches(opt, "-family") == 0) {
 			argc--;
 			argv++;
 			if (argc <= 1)
-				usage();
+				missarg("family type");
 			if (strcmp(argv[1], "help") == 0)
-				usage();
+				do_help(argc, argv);
 			else
 				preferred_family = read_family(argv[1]);
 			if (preferred_family == AF_UNSPEC)
@@ -258,7 +258,7 @@ int main(int argc, char **argv)
 			argc--;
 			argv++;
 			if (argc <= 1)
-				usage();
+				missarg("batch file");
 			batch_file = argv[1];
 		} else if (matches(opt, "-brief") == 0) {
 			++brief;
@@ -272,7 +272,7 @@ int main(int argc, char **argv)
 			argc--;
 			argv++;
 			if (argc <= 1)
-				usage();
+				missarg("rcvbuf size");
 			if (get_unsigned(&size, argv[1], 0)) {
 				fprintf(stderr, "Invalid rcvbuf size '%s'\n",
 					argv[1]);

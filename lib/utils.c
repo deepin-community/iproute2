@@ -108,7 +108,7 @@ static int get_hex(char c)
 	return -1;
 }
 
-int get_integer(int *val, const char *arg, int base)
+int get_long(long *val, const char *arg, int base)
 {
 	long res;
 	char *ptr;
@@ -131,6 +131,18 @@ int get_integer(int *val, const char *arg, int base)
 	 * In both cases, errno is set to ERANGE.
 	 */
 	if ((res == LONG_MAX || res == LONG_MIN) && errno == ERANGE)
+		return -1;
+
+	if (val)
+		*val = res;
+	return 0;
+}
+
+int get_integer(int *val, const char *arg, int base)
+{
+	long res;
+
+	if (get_long(&res, arg, base) < 0)
 		return -1;
 
 	/* Outside range of int */
@@ -861,18 +873,35 @@ const char *get_ifname_rta(int ifindex, const struct rtattr *rta)
 	return name;
 }
 
-/* Returns false if 'prefix' is a not empty prefix of 'string'.
+/* Returns 0 if 'prefix' is a not empty prefix of 'string', != 0 otherwise.
  */
-bool matches(const char *prefix, const char *string)
+int matches(const char *prefix, const char *string)
 {
 	if (!*prefix)
-		return true;
+		return 1;
 	while (*string && *prefix == *string) {
 		prefix++;
 		string++;
 	}
 
-	return !!*prefix;
+	return *prefix;
+}
+
+static int matches_warn(const char *prefix, const char *string)
+{
+	int rc;
+
+	rc = matches(prefix, string);
+	if (rc)
+		return rc;
+
+	if (strlen(prefix) != strlen(string))
+		fprintf(stderr,
+			"WARNING: '%s' matches '%s' by prefix.\n"
+			"Matching by prefix is deprecated in this context, please use the full string.\n",
+			prefix, string);
+
+	return 0;
 }
 
 int inet_addr_match(const inet_prefix *a, const inet_prefix *b, int bits)
@@ -1398,6 +1427,12 @@ char *int_to_str(int val, char *buf)
 	return buf;
 }
 
+char *uint_to_str(unsigned int val, char *buf)
+{
+	sprintf(buf, "%u", val);
+	return buf;
+}
+
 int get_guid(__u64 *guid, const char *arg)
 {
 	unsigned long tmp;
@@ -1547,7 +1582,7 @@ size_t strlcat(char *dst, const char *src, size_t size)
 void drop_cap(void)
 {
 #ifdef HAVE_LIBCAP
-	/* don't harmstring root/sudo */
+	/* don't hamstring root/sudo */
 	if (getuid() != 0 && geteuid() != 0) {
 		cap_t capabilities;
 		cap_value_t net_admin = CAP_NET_ADMIN;
@@ -1711,13 +1746,15 @@ int do_batch(const char *name, bool force,
 	return ret;
 }
 
-int parse_one_of(const char *msg, const char *realval, const char * const *list,
-		 size_t len, int *p_err)
+static int
+__parse_one_of(const char *msg, const char *realval,
+	       const char * const *list, size_t len, int *p_err,
+	       int (*matcher)(const char *, const char *))
 {
 	int i;
 
 	for (i = 0; i < len; i++) {
-		if (list[i] && matches(realval, list[i]) == 0) {
+		if (list[i] && matcher(realval, list[i]) == 0) {
 			*p_err = 0;
 			return i;
 		}
@@ -1732,11 +1769,25 @@ int parse_one_of(const char *msg, const char *realval, const char * const *list,
 	return 0;
 }
 
+int parse_one_of(const char *msg, const char *realval, const char * const *list,
+		 size_t len, int *p_err)
+{
+	return __parse_one_of(msg, realval, list, len, p_err, matches_warn);
+}
+
+int parse_one_of_deprecated(const char *msg, const char *realval,
+			    const char * const *list,
+			    size_t len, int *p_err)
+{
+	return __parse_one_of(msg, realval, list, len, p_err, matches);
+}
+
 bool parse_on_off(const char *msg, const char *realval, int *p_err)
 {
 	static const char * const values_on_off[] = { "off", "on" };
 
-	return parse_one_of(msg, realval, values_on_off, ARRAY_SIZE(values_on_off), p_err);
+	return __parse_one_of(msg, realval, values_on_off,
+			      ARRAY_SIZE(values_on_off), p_err, strcmp);
 }
 
 int parse_mapping_gen(int *argcp, char ***argvp,
@@ -1951,4 +2002,18 @@ int proto_a2n(unsigned short *id, const char *buf,
 		return -1;
 
 	return 0;
+}
+
+FILE *generic_proc_open(const char *env, const char *name)
+{
+	const char *p = getenv(env);
+	char store[128];
+
+	if (!p) {
+		p = getenv("PROC_ROOT") ? : "/proc";
+		snprintf(store, sizeof(store) - 1, "%s/%s", p, name);
+		p = store;
+	}
+
+	return fopen(p, "r");
 }
