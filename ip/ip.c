@@ -27,8 +27,6 @@
 #endif
 
 int preferred_family = AF_UNSPEC;
-int human_readable;
-int use_iec;
 int show_stats;
 int show_details;
 int oneline;
@@ -168,7 +166,7 @@ int main(int argc, char **argv)
 	const char *libbpf_version;
 	char *batch_file = NULL;
 	char *basename;
-	int color = CONF_COLOR;
+	int color = default_color_opt();
 
 	/* to run vrf exec without root, capabilities might be set, drop them
 	 * if not needed as the first thing.

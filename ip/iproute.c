@@ -67,7 +67,7 @@ static void usage(void)
 		"                            [ mark NUMBER ] [ vrf NAME ]\n"
 		"                            [ uid NUMBER ] [ ipproto PROTOCOL ]\n"
 		"                            [ sport NUMBER ] [ dport NUMBER ]\n"
-		"                            [ as ADDRESS ]\n"
+		"                            [ as ADDRESS ] [ flowlabel FLOWLABEL ]\n"
 		"       ip route { add | del | change | append | replace } ROUTE\n"
 		"SELECTOR := [ root PREFIX ] [ match PREFIX ] [ exact PREFIX ]\n"
 		"            [ table TABLE_ID ] [ vrf NAME ] [ proto RTPROTO ]\n"
@@ -152,6 +152,24 @@ static int flush_update(void)
 	}
 	filter.flushp = 0;
 	return 0;
+}
+
+static bool filter_multipath(const struct rtattr *rta)
+{
+	const struct rtnexthop *nh = RTA_DATA(rta);
+	int len = RTA_PAYLOAD(rta);
+
+	while (len >= sizeof(*nh)) {
+		if (nh->rtnh_len > len)
+			break;
+
+		if (!((nh->rtnh_ifindex ^ filter.oif) & filter.oifmask))
+			return true;
+
+		len -= NLMSG_ALIGN(nh->rtnh_len);
+		nh = RTNH_NEXT(nh);
+	}
+	return false;
 }
 
 static int filter_nlmsg(struct nlmsghdr *n, struct rtattr **tb, int host_len)
@@ -310,12 +328,15 @@ static int filter_nlmsg(struct nlmsghdr *n, struct rtattr **tb, int host_len)
 			return 0;
 	}
 	if (filter.oifmask) {
-		int oif = 0;
+		if (tb[RTA_OIF]) {
+			int oif = rta_getattr_u32(tb[RTA_OIF]);
 
-		if (tb[RTA_OIF])
-			oif = rta_getattr_u32(tb[RTA_OIF]);
-		if ((oif^filter.oif)&filter.oifmask)
-			return 0;
+			if ((oif ^ filter.oif) & filter.oifmask)
+				return 0;
+		} else if (tb[RTA_MULTIPATH]) {
+			if (!filter_multipath(tb[RTA_MULTIPATH]))
+				return 0;
+		}
 	}
 	if (filter.markmask) {
 		int mark = 0;
@@ -796,6 +817,8 @@ int print_route(struct nlmsghdr *n, void *arg)
 		if (show_stats < 2)
 			return 0;
 	}
+
+	print_headers(fp, "[ROUTE]");
 
 	open_json_object(NULL);
 	if (n->nlmsg_type == RTM_DELROUTE)
@@ -1706,7 +1729,10 @@ static int iproute_flush(int family, rtnl_filter_t filter_fn)
 
 	if (filter.cloned) {
 		if (family != AF_INET6) {
-			iproute_flush_cache();
+			ret = iproute_flush_cache();
+			if (ret < 0)
+				return ret;
+
 			if (show_stats)
 				printf("*** IPv4 routing cache is flushed.\n");
 		}
@@ -2106,6 +2132,14 @@ static int iproute_get(int argc, char **argv)
 				invarg("Invalid \"ipproto\" value\n",
 				       *argv);
 			addattr8(&req.n, sizeof(req), RTA_IP_PROTO, ipproto);
+		} else if (strcmp(*argv, "flowlabel") == 0) {
+			__be32 flowlabel;
+
+			NEXT_ARG();
+			if (get_be32(&flowlabel, *argv, 0))
+				invarg("invalid flowlabel", *argv);
+			addattr32(&req.n, sizeof(req), RTA_FLOWLABEL,
+				  flowlabel);
 		} else {
 			inet_prefix addr;
 

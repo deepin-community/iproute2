@@ -19,7 +19,7 @@ ip-address \- protocol address management
 .RI "[ " LIFETIME " ] [ " CONFFLAG-LIST " ]"
 
 .ti -8
-.BR "ip address del"
+.BR "ip address delete"
 .IB IFADDR " dev " IFNAME " [ " mngtmpaddr " ]"
 
 .ti -8
@@ -32,7 +32,7 @@ ip-address \- protocol address management
 .B  to
 .IR PREFIX " ] [ " FLAG-LIST " ] [ "
 .B  label
-.IR PATTERN " ] [ " up " ]"
+.IR PATTERN " ] [ { " up " | " down " } ]"
 
 .ti -8
 .BR "ip address" " [ " show  " [ " dev
@@ -48,8 +48,8 @@ ip-address \- protocol address management
 .B  type
 .IR TYPE " ] [ "
 .B vrf
-.IR NAME " ] [ "
-.BR up " ] ["
+.IR NAME " ] [ { "
+.BR up " | " down " } ] ["
 .BR nomaster " ]"
 .B proto
 .IR ADDRPROTO " ] ]"
@@ -303,7 +303,10 @@ receive multicast traffic.
 the protocol identifier of this route.
 .I ADDRPROTO
 may be a number or a string from the file
-.BR "/etc/iproute2/rt_addrprotos" .
+.BR @SYSCONF_USR_DIR@/rt_addrprotos " or " @SYSCONF_ETC_DIR@/rt_addrprotos
+(has precedence if exists).  A directory named
+.BR rt_addrprotos.d
+is also scanned in either location.
 If the protocol ID is not given,
 
 .B ip assumes protocol 0. Several protocol
@@ -331,9 +334,9 @@ to assign (or not to assign) protocol tags.
 .SS ip address delete - delete protocol address
 .B Arguments:
 coincide with the arguments of
-.B ip addr add.
-The device name is a required argument. The rest are optional.
-If no arguments are given, the first address is deleted.
+.B ip address add.
+.sp
+The device name is a required argument.
 
 .SS ip address show - look at protocol addresses
 
@@ -377,6 +380,10 @@ output.
 .TP
 .B up
 only list running interfaces.
+
+.TP
+.B down
+only list not running interfaces.
 
 .TP
 .B nomaster
@@ -444,7 +451,7 @@ This is an alias for
 .BI proto " ADDRPROTO"
 Only show addresses with a given protocol, or those for which the kernel
 response did not include protocol. See the corresponding argument to
-.B ip addr add
+.B ip address add
 for details about address protocols.
 
 .SS ip address flush - flush protocol addresses

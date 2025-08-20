@@ -1,21 +1,21 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #define _ATFILE_SOURCE
-#include <sys/file.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <sys/inotify.h>
-#include <sys/mount.h>
-#include <sys/syscall.h>
+
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
-#include <sched.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <errno.h>
 #include <unistd.h>
 #include <ctype.h>
-#include <linux/limits.h>
+#include <limits.h>
+
+#include <sys/file.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/inotify.h>
+#include <sys/mount.h>
 
 #include <linux/net_namespace.h>
 
@@ -23,7 +23,6 @@
 #include "list.h"
 #include "ip_common.h"
 #include "namespace.h"
-#include "json_print.h"
 
 static int usage(void)
 {
@@ -104,7 +103,7 @@ static int ipnetns_have_nsid(void)
 	return have_rtnl_getnsid;
 }
 
-int get_netnsid_from_name(const char *name)
+static int get_netnsid_from_name(const char *name)
 {
 	netns_nsid_socket_init();
 
@@ -288,6 +287,8 @@ int print_nsid(struct nlmsghdr *n, void *arg)
 		fprintf(stderr, "BUG: NETNSA_NSID is missing %s\n", __func__);
 		return -1;
 	}
+
+	print_headers(fp, "[NSID]");
 
 	open_json_object(NULL);
 	if (n->nlmsg_type == RTM_DELNSID)
@@ -894,33 +895,11 @@ out_delete:
 	return -1;
 }
 
-int set_netnsid_from_name(const char *name, int nsid)
+static int set_netnsid_from_name(const char *name, int nsid)
 {
-	struct {
-		struct nlmsghdr n;
-		struct rtgenmsg g;
-		char            buf[1024];
-	} req = {
-		.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtgenmsg)),
-		.n.nlmsg_flags = NLM_F_REQUEST,
-		.n.nlmsg_type = RTM_NEWNSID,
-		.g.rtgen_family = AF_UNSPEC,
-	};
-	int fd, err = 0;
-
 	netns_nsid_socket_init();
 
-	fd = netns_get_fd(name);
-	if (fd < 0)
-		return fd;
-
-	addattr32(&req.n, 1024, NETNSA_FD, fd);
-	addattr32(&req.n, 1024, NETNSA_NSID, nsid);
-	if (rtnl_talk(&rth, &req.n, NULL) < 0)
-		err = -2;
-
-	close(fd);
-	return err;
+	return set_netns_id_from_name(&rth, name, nsid);
 }
 
 static int netns_set(int argc, char **argv)

@@ -52,12 +52,12 @@ static void usage(void)
 		"Usage: ip address {add|change|replace} IFADDR dev IFNAME [ LIFETIME ]\n"
 		"                                                      [ CONFFLAG-LIST ]\n"
 		"       ip address del IFADDR dev IFNAME [mngtmpaddr]\n"
-		"       ip address {save|flush} [ dev IFNAME ] [ scope SCOPE-ID ]\n"
-		"                            [ to PREFIX ] [ FLAG-LIST ] [ label LABEL ] [up]\n"
+		"       ip address {save|flush} [ dev IFNAME ] [ scope SCOPE-ID ] [ to PREFIX ]\n"
+		"                            [ FLAG-LIST ] [ label LABEL ] [ { up | down } ]\n"
 		"       ip address [ show [ dev IFNAME ] [ scope SCOPE-ID ] [ master DEVICE ]\n"
 		"                         [ nomaster ]\n"
 		"                         [ type TYPE ] [ to PREFIX ] [ FLAG-LIST ]\n"
-		"                         [ label LABEL ] [up] [ vrf NAME ]\n"
+		"                         [ label LABEL ] [ { up | down } ] [ vrf NAME ]\n"
 		"                         [ proto ADDRPROTO ] ]\n"
 		"       ip address {showdump|restore}\n"
 		"IFADDR := PREFIX | ADDR peer PREFIX\n"
@@ -568,46 +568,6 @@ void size_columns(unsigned int cols[], unsigned int n, ...)
 	va_end(args);
 }
 
-void print_num(FILE *fp, unsigned int width, uint64_t count)
-{
-	const char *prefix = "kMGTPE";
-	const unsigned int base = use_iec ? 1024 : 1000;
-	uint64_t powi = 1;
-	uint16_t powj = 1;
-	uint8_t precision = 2;
-	char buf[64];
-
-	if (!human_readable || count < base) {
-		fprintf(fp, "%*"PRIu64" ", width, count);
-		return;
-	}
-
-	/* increase value by a factor of 1000/1024 and print
-	 * if result is something a human can read
-	 */
-	for (;;) {
-		powi *= base;
-		if (count / base < powi)
-			break;
-
-		if (!prefix[1])
-			break;
-		++prefix;
-	}
-
-	/* try to guess a good number of digits for precision */
-	for (; precision > 0; precision--) {
-		powj *= 10;
-		if (count / powi < powj)
-			break;
-	}
-
-	snprintf(buf, sizeof(buf), "%.*f%c%s", precision,
-		 (double) count / powi, *prefix, use_iec ? "i" : "");
-
-	fprintf(fp, "%*s ", width, buf);
-}
-
 static void print_vf_stats64(FILE *fp, struct rtattr *vfstats)
 {
 	struct rtattr *vf[IFLA_VF_STATS_MAX + 1];
@@ -1021,6 +981,8 @@ int print_linkinfo(struct nlmsghdr *n, void *arg)
 		return -1;
 	if (filter.up && !(ifi->ifi_flags&IFF_UP))
 		return -1;
+	if (filter.down && ifi->ifi_flags&IFF_UP)
+		return -1;
 
 	parse_rtattr_flags(tb, IFLA_MAX, IFLA_RTA(ifi), len, NLA_F_NESTED);
 
@@ -1051,6 +1013,8 @@ int print_linkinfo(struct nlmsghdr *n, void *arg)
 
 	if (filter.slave_kind && match_link_kind(tb, filter.slave_kind, 1))
 		return -1;
+
+	print_headers(fp, "[LINK]");
 
 	if (n->nlmsg_type == RTM_DELLINK)
 		print_bool(PRINT_ANY, "deleted", "Deleted ", true);
@@ -1540,7 +1504,12 @@ int print_addrinfo(struct nlmsghdr *n, void *arg)
 
 	SPRINT_BUF(b1);
 
-	if (n->nlmsg_type != RTM_NEWADDR && n->nlmsg_type != RTM_DELADDR)
+	if (n->nlmsg_type != RTM_NEWADDR &&
+	    n->nlmsg_type != RTM_DELADDR &&
+	    n->nlmsg_type != RTM_NEWMULTICAST &&
+	    n->nlmsg_type != RTM_DELMULTICAST &&
+	    n->nlmsg_type != RTM_NEWANYCAST &&
+	    n->nlmsg_type != RTM_DELANYCAST)
 		return 0;
 	len -= NLMSG_LENGTH(sizeof(*ifa));
 	if (len < 0) {
@@ -1598,7 +1567,11 @@ int print_addrinfo(struct nlmsghdr *n, void *arg)
 			return 0;
 	}
 
-	if (n->nlmsg_type == RTM_DELADDR)
+	print_headers(fp, "[ADDR]");
+
+	if (n->nlmsg_type == RTM_DELADDR ||
+	    n->nlmsg_type == RTM_DELMULTICAST ||
+	    n->nlmsg_type == RTM_DELANYCAST)
 		print_bool(PRINT_ANY, "deleted", "Deleted ", true);
 
 	if (!brief) {
@@ -1671,6 +1644,16 @@ int print_addrinfo(struct nlmsghdr *n, void *arg)
 				   "%s ",
 				   format_host_rta(ifa->ifa_family,
 						   rta_tb[IFA_ANYCAST]));
+	}
+
+	if (rta_tb[IFA_MULTICAST]) {
+		print_string(PRINT_FP, NULL, "%s ", "mcast");
+		print_color_string(PRINT_ANY,
+				   ifa_family_color(ifa->ifa_family),
+				   "multicast",
+				   "%s ",
+				   format_host_rta(ifa->ifa_family,
+						   rta_tb[IFA_MULTICAST]));
 	}
 
 	print_string(PRINT_ANY,
@@ -1754,6 +1737,9 @@ static int print_selected_addrinfo(struct ifinfomsg *ifi,
 			continue;
 
 		if (filter.up && !(ifi->ifi_flags&IFF_UP))
+			continue;
+
+		if (filter.down && ifi->ifi_flags&IFF_UP)
 			continue;
 
 		open_json_object(NULL);
@@ -2029,10 +2015,11 @@ static int ipaddr_flush(void)
 
 static int iplink_filter_req(struct nlmsghdr *nlh, int reqlen)
 {
-	__u32 filt_mask;
+	__u32 filt_mask = 0;
 	int err;
 
-	filt_mask = RTEXT_FILTER_VF;
+	if (filter.vfinfo)
+		filt_mask |= RTEXT_FILTER_VF;
 	if (!show_stats)
 		filt_mask |= RTEXT_FILTER_SKIP_STATS;
 	err = addattr32(nlh, reqlen, IFLA_EXT_MASK, filt_mask);
@@ -2070,12 +2057,13 @@ static int ipaddr_link_get(int index, struct nlmsg_chain *linfo)
 		.i.ifi_family = filter.family,
 		.i.ifi_index = index,
 	};
-	__u32 filt_mask = RTEXT_FILTER_VF;
+	__u32 filt_mask = 0;
 	struct nlmsghdr *answer;
 
+	if (filter.vfinfo)
+		filt_mask |= RTEXT_FILTER_VF;
 	if (!show_stats)
 		filt_mask |= RTEXT_FILTER_SKIP_STATS;
-
 	addattr32(&req.n, sizeof(req), IFLA_EXT_MASK, filt_mask);
 
 	if (rtnl_talk(&rth, &req.n, &answer) < 0) {
@@ -2139,6 +2127,7 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 	ipaddr_reset_filter(oneline, 0);
 	filter.showqueue = 1;
 	filter.family = preferred_family;
+	filter.vfinfo = 1;
 
 	if (action == IPADD_FLUSH) {
 		if (argc <= 0) {
@@ -2173,6 +2162,8 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 			filter.scope = scope;
 		} else if (strcmp(*argv, "up") == 0) {
 			filter.up = 1;
+		} else if (strcmp(*argv, "down") == 0) {
+			filter.down = 1;
 		} else if (get_filter(*argv) == 0) {
 
 		} else if (strcmp(*argv, "label") == 0) {
@@ -2221,6 +2212,8 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 				invarg("\"proto\" value is invalid\n", *argv);
 			filter.have_proto = true;
 			filter.proto = proto;
+		} else if (strcmp(*argv, "novf") == 0) {
+			filter.vfinfo = 0;
 		} else {
 			if (strcmp(*argv, "dev") == 0)
 				NEXT_ARG();
@@ -2274,7 +2267,7 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 	 * the link device
 	 */
 	if (filter_dev && filter.group == -1 && do_link == 1) {
-		if (iplink_get(filter_dev, RTEXT_FILTER_VF) < 0) {
+		if (iplink_get(filter_dev, filter.vfinfo ? RTEXT_FILTER_VF : 0) < 0) {
 			perror("Cannot send link get request");
 			delete_json_obj();
 			exit(1);

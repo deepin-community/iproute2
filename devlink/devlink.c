@@ -309,6 +309,7 @@ static int ifname_map_update(struct ifname_map *ifname_map, const char *ifname)
 #define DL_OPT_PORT_FN_RATE_TX_PRIORITY	BIT(55)
 #define DL_OPT_PORT_FN_RATE_TX_WEIGHT	BIT(56)
 #define DL_OPT_PORT_FN_CAPS	BIT(57)
+#define DL_OPT_PORT_FN_MAX_IO_EQS	BIT(58)
 
 struct dl_opts {
 	uint64_t present; /* flags of present items */
@@ -375,6 +376,7 @@ struct dl_opts {
 	const char *linecard_type;
 	bool selftests_opt[DEVLINK_ATTR_SELFTEST_ID_MAX + 1];
 	struct nla_bitfield32 port_fn_caps;
+	uint32_t port_fn_max_io_eqs;
 };
 
 struct dl {
@@ -773,6 +775,7 @@ devlink_function_policy[DEVLINK_PORT_FUNCTION_ATTR_MAX + 1] = {
 	[DEVLINK_PORT_FUNCTION_ATTR_HW_ADDR ] = MNL_TYPE_BINARY,
 	[DEVLINK_PORT_FN_ATTR_STATE] = MNL_TYPE_U8,
 	[DEVLINK_PORT_FN_ATTR_DEVLINK] = MNL_TYPE_NESTED,
+	[DEVLINK_PORT_FN_ATTR_MAX_IO_EQS] = MNL_TYPE_U32,
 };
 
 static int function_attr_cb(const struct nlattr *attr, void *data)
@@ -843,7 +846,7 @@ static int ifname_map_rtnl_init(struct dl *dl, const char *ifname)
 	struct rtattr *tb[IFLA_MAX + 1];
 	struct rtnl_handle rth;
 	struct ifinfomsg *ifi;
-	struct nlmsghdr *n;
+	struct nlmsghdr *n = NULL;
 	int len;
 	int err;
 
@@ -884,6 +887,7 @@ static int ifname_map_rtnl_init(struct dl *dl, const char *ifname)
 	err = ifname_map_rtnl_port_parse(dl, ifname, tb[IFLA_DEVLINK_PORT]);
 
 out:
+	free(n);
 	rtnl_close(&rth);
 	return err;
 }
@@ -1677,26 +1681,28 @@ static const struct dl_args_metadata dl_args_required[] = {
 static int dl_args_finding_required_validate(uint64_t o_required,
 					     uint64_t o_found)
 {
-	uint64_t o_flag;
-	int i;
+	uint64_t o_flag, o_missing = 0;
+	int i, err = 0;
 
 	for (i = 0; i < ARRAY_SIZE(dl_args_required); i++) {
 		o_flag = dl_args_required[i].o_flag;
 		if ((o_required & o_flag) && !(o_found & o_flag)) {
+			o_missing |= o_flag;
 			pr_err("%s\n", dl_args_required[i].err_msg);
-			return -ENOENT;
+			err = -ENOENT;
 		}
 	}
-	if (o_required & ~o_found) {
+	if (o_required & ~(o_found | o_missing)) {
 		pr_err("BUG: unknown argument required but not found\n");
 		return -EINVAL;
 	}
-	return 0;
+	return err;
 }
 
 static int dl_argv_parse(struct dl *dl, uint64_t o_required,
 			 uint64_t o_optional)
 {
+	const char *unknown_option = NULL;
 	struct dl_opts *opts = &dl->opts;
 	uint64_t o_all = o_required | o_optional;
 	char *str = dl_argv_next(dl);
@@ -2298,9 +2304,21 @@ static int dl_argv_parse(struct dl *dl, uint64_t o_required,
 			if (ipsec_packet)
 				opts->port_fn_caps.value |= DEVLINK_PORT_FN_CAP_IPSEC_PACKET;
 			o_found |= DL_OPT_PORT_FN_CAPS;
+		} else if (dl_argv_match(dl, "max_io_eqs") &&
+			   (o_all & DL_OPT_PORT_FN_MAX_IO_EQS)) {
+			uint32_t max_io_eqs;
+
+			dl_arg_inc(dl);
+			err = dl_argv_uint32_t(dl, &max_io_eqs);
+			if (err)
+				return err;
+			opts->port_fn_max_io_eqs = max_io_eqs;
+			o_found |= DL_OPT_PORT_FN_MAX_IO_EQS;
+
 		} else {
-			pr_err("Unknown option \"%s\"\n", dl_argv(dl));
-			return -EINVAL;
+			if (!unknown_option)
+				unknown_option = dl_argv(dl);
+			dl_arg_inc(dl);
 		}
 	}
 
@@ -2311,7 +2329,15 @@ static int dl_argv_parse(struct dl *dl, uint64_t o_required,
 
 	opts->present = o_found;
 
-	return dl_args_finding_required_validate(o_required, o_found);
+	err = dl_args_finding_required_validate(o_required, o_found);
+
+	if (unknown_option) {
+		pr_err("Unknown option \"%s\"\n", unknown_option);
+		if (!err)
+			return -EINVAL;
+	}
+
+	return err;
 }
 
 static int dl_argv_dry_parse(struct dl *dl, uint64_t o_required,
@@ -2384,7 +2410,7 @@ static int dl_argv_parse_with_selector(struct dl *dl, uint16_t *flags,
 						o_optional);
 			if (err == -ENOENT || !err)
 				goto dump_parse;
-			goto do_parse;
+			break;
 		}
 	}
 
@@ -2428,6 +2454,9 @@ dl_function_attr_put(struct nlmsghdr *nlh, const struct dl_opts *opts)
 	if (opts->present & DL_OPT_PORT_FN_CAPS)
 		mnl_attr_put(nlh, DEVLINK_PORT_FN_ATTR_CAPS,
 			     sizeof(opts->port_fn_caps), &opts->port_fn_caps);
+	if (opts->present & DL_OPT_PORT_FN_MAX_IO_EQS)
+		mnl_attr_put_u32(nlh, DEVLINK_PORT_FN_ATTR_MAX_IO_EQS,
+				opts->port_fn_max_io_eqs);
 
 	mnl_attr_nest_end(nlh, nest);
 }
@@ -2620,7 +2649,7 @@ static void dl_opts_put(struct nlmsghdr *nlh, struct dl *dl)
 		mnl_attr_put_u64(nlh, DEVLINK_ATTR_TRAP_POLICER_BURST,
 				 opts->trap_policer_burst);
 	if (opts->present & (DL_OPT_PORT_FUNCTION_HW_ADDR | DL_OPT_PORT_FUNCTION_STATE |
-			     DL_OPT_PORT_FN_CAPS))
+			     DL_OPT_PORT_FN_CAPS | DL_OPT_PORT_FN_MAX_IO_EQS))
 		dl_function_attr_put(nlh, opts);
 	if (opts->present & DL_OPT_PORT_FLAVOUR)
 		mnl_attr_put_u16(nlh, DEVLINK_ATTR_PORT_FLAVOUR, opts->port_flavour);
@@ -4744,6 +4773,7 @@ static void cmd_port_help(void)
 	pr_err("       devlink port function set DEV/PORT_INDEX [ hw_addr ADDR ] [ state { active | inactive } ]\n");
 	pr_err("                      [ roce { enable | disable } ] [ migratable { enable | disable } ]\n");
 	pr_err("                      [ ipsec_crypto { enable | disable } ] [ ipsec_packet { enable | disable } ]\n");
+	pr_err("                      [ max_io_eqs EQS ]\n");
 	pr_err("       devlink port function rate { help | show | add | del | set }\n");
 	pr_err("       devlink port param set DEV/PORT_INDEX name PARAMETER value VALUE cmode { permanent | driverinit | runtime }\n");
 	pr_err("       devlink port param show [DEV/PORT_INDEX name PARAMETER]\n");
@@ -4878,6 +4908,15 @@ static void pr_out_port_function(struct dl *dl, struct nlattr **tb_port)
 				     port_fn_caps->value & DEVLINK_PORT_FN_CAP_IPSEC_PACKET ?
 				     "enable" : "disable");
 	}
+	if (tb[DEVLINK_PORT_FN_ATTR_MAX_IO_EQS]) {
+		uint32_t max_io_eqs;
+
+		max_io_eqs = mnl_attr_get_u32(tb[DEVLINK_PORT_FN_ATTR_MAX_IO_EQS]);
+
+		print_uint(PRINT_ANY, "max_io_eqs", " max_io_eqs %u",
+			   max_io_eqs);
+	}
+
 	if (tb[DEVLINK_PORT_FN_ATTR_DEVLINK])
 		pr_out_nested_handle_obj(dl, tb[DEVLINK_PORT_FN_ATTR_DEVLINK],
 					 true, true);
@@ -5050,7 +5089,7 @@ static int cmd_port_param_show(struct dl *dl)
 
 	err = dl_argv_parse_with_selector(dl, &flags,
 					  DEVLINK_CMD_PORT_PARAM_GET,
-					  DL_OPT_HANDLE | DL_OPT_PARAM_NAME, 0,
+					  DL_OPT_HANDLEP | DL_OPT_PARAM_NAME, 0,
 					  DL_OPT_HANDLE | DL_OPT_HANDLEP, 0);
 	if (err)
 		return err;
@@ -5086,7 +5125,7 @@ static int cmd_port_function_set(struct dl *dl)
 	}
 	err = dl_argv_parse(dl, DL_OPT_HANDLEP,
 			    DL_OPT_PORT_FUNCTION_HW_ADDR | DL_OPT_PORT_FUNCTION_STATE |
-			    DL_OPT_PORT_FN_CAPS);
+			    DL_OPT_PORT_FN_CAPS | DL_OPT_PORT_FN_MAX_IO_EQS);
 	if (err)
 		return err;
 

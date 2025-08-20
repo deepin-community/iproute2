@@ -53,7 +53,7 @@
 #include <linux/mptcp.h>
 
 #ifdef HAVE_LIBBPF
-/* If libbpf is new enough (0.5+), support for pretty-printing BPF socket-local
+/* If libbpf is new enough (0.6+), support for pretty-printing BPF socket-local
  * storage is enabled, otherwise we emit a warning and disable it.
  * ENABLE_BPF_SKSTORAGE_SUPPORT is only used to gate the socket-local storage
  * feature, so this wouldn't prevent any feature relying on HAVE_LIBBPF to be
@@ -66,8 +66,8 @@
 #include <bpf/libbpf.h>
 #include <linux/btf.h>
 
-#if (LIBBPF_MAJOR_VERSION == 0) && (LIBBPF_MINOR_VERSION < 5)
-#warning "libbpf version 0.5 or later is required, disabling BPF socket-local storage support"
+#if ((LIBBPF_MAJOR_VERSION == 0) && (LIBBPF_MINOR_VERSION < 6))
+#warning "libbpf version 0.6 or later is required, disabling BPF socket-local storage support"
 #undef ENABLE_BPF_SKSTORAGE_SUPPORT
 #endif
 #endif
@@ -1043,6 +1043,7 @@ static int buf_update(int len)
 }
 
 /* Append content to buffer as part of the current field */
+__attribute__((format(printf, 1, 0)))
 static void vout(const char *fmt, va_list args)
 {
 	struct column *f = current_field;
@@ -1175,7 +1176,9 @@ static void buf_free_all(void)
 	buffer.chunks = 0;
 }
 
-/* Get current screen width, returns -1 if TIOCGWINSZ fails */
+/* Get current screen width. Returns -1 if TIOCGWINSZ fails and there's
+ * no COLUMNS variable in the environment.
+ */
 static int render_screen_width(void)
 {
 	int width = -1;
@@ -1186,6 +1189,17 @@ static int render_screen_width(void)
 		if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) != -1) {
 			if (w.ws_col > 0)
 				width = w.ws_col;
+		}
+	}
+
+	if (width == -1) {
+		const char *p = getenv("COLUMNS");
+		int c;
+
+		if (p) {
+			c = atoi(p);
+			if (c > 0)
+				width = c;
 		}
 	}
 
@@ -1502,7 +1516,7 @@ static const char *print_ms_timer(unsigned int timeout)
 		sprintf(buf+strlen(buf), "%d%s", secs, msecs ? "." : "sec");
 	}
 	if (msecs)
-		sprintf(buf+strlen(buf), "%03dms", msecs);
+		sprintf(buf+strlen(buf), "%03d%s", msecs, secs ? "sec" : "ms");
 	return buf;
 }
 
@@ -3041,16 +3055,16 @@ static void mptcp_subflow_info(struct rtattr *tb[])
 		    rta_getattr_u32(tb[MPTCP_SUBFLOW_ATTR_TOKEN_LOC]),
 		    rta_getattr_u8(tb[MPTCP_SUBFLOW_ATTR_ID_LOC]));
 	if (tb[MPTCP_SUBFLOW_ATTR_MAP_SEQ])
-		out(" seq:%llx",
+		out(" seq:%llu",
 		    rta_getattr_u64(tb[MPTCP_SUBFLOW_ATTR_MAP_SEQ]));
 	if (tb[MPTCP_SUBFLOW_ATTR_MAP_SFSEQ])
-		out(" sfseq:%x",
+		out(" sfseq:%u",
 		    rta_getattr_u32(tb[MPTCP_SUBFLOW_ATTR_MAP_SFSEQ]));
 	if (tb[MPTCP_SUBFLOW_ATTR_SSN_OFFSET])
-		out(" ssnoff:%x",
+		out(" ssnoff:%u",
 		    rta_getattr_u32(tb[MPTCP_SUBFLOW_ATTR_SSN_OFFSET]));
 	if (tb[MPTCP_SUBFLOW_ATTR_MAP_DATALEN])
-		out(" maplen:%x",
+		out(" maplen:%u",
 		    rta_getattr_u32(tb[MPTCP_SUBFLOW_ATTR_MAP_DATALEN]));
 }
 
@@ -3294,6 +3308,12 @@ static void mptcp_stats_print(struct mptcp_info *s)
 		out(" bytes_acked:%llu", s->mptcpi_bytes_acked);
 	if (s->mptcpi_subflows_total)
 		out(" subflows_total:%u", s->mptcpi_subflows_total);
+	if (s->mptcpi_last_data_sent)
+		out(" last_data_sent:%u", s->mptcpi_last_data_sent);
+	if (s->mptcpi_last_data_recv)
+		out(" last_data_recv:%u", s->mptcpi_last_data_recv);
+	if (s->mptcpi_last_ack_recv)
+		out(" last_ack_recv:%u", s->mptcpi_last_ack_recv);
 }
 
 static void mptcp_show_info(const struct nlmsghdr *nlh, struct inet_diag_msg *r,
@@ -3454,6 +3474,7 @@ static int bpf_maps_opts_load_btf(struct bpf_map_info *info, struct btf **btf)
 	return 0;
 }
 
+__attribute__((format(printf, 2, 0)))
 static void out_bpf_sk_storage_print_fn(void *ctx, const char *fmt, va_list args)
 {
 	vout(fmt, args);
