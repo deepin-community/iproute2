@@ -194,15 +194,16 @@ ip-link \- network device configuration
 .B ip link show
 .RI "[ " DEVICE " | "
 .B group
-.IR GROUP " ] ["
-.BR up " ] ["
+.IR GROUP " ] [ { "
+.BR up " | " down " } ] ["
 .B master
 .IR DEVICE " ] ["
 .B type
 .IR ETYPE " ] ["
 .B vrf
 .IR NAME " ] ["
-.BR nomaster " ]"
+.BR nomaster " ] ["
+.BR novf " ]"
 
 .ti -8
 .B ip link xstats
@@ -249,6 +250,7 @@ ip-link \- network device configuration
 .BR netdevsim " |"
 .BR netkit " |"
 .BR nlmon " |"
+.BR pfcp " |"
 .BR rmnet " |"
 .BR sit " |"
 .BR vcan " | "
@@ -390,6 +392,9 @@ Link types:
 .sp
 .BR nlmon
 - Netlink monitoring device
+.sp
+.BR pfcp
+- Packet Forwarding Control Protocol device
 .sp
 .BR rmnet
 - Qualcomm rmnet device
@@ -627,6 +632,8 @@ the following additional arguments are supported:
 ] [
 .BI srcport " MIN MAX "
 ] [
+.BI reserved_bits " VALUE "
+] [
 .RB [ no ] learning
 ] [
 .RB [ no ] proxy
@@ -719,6 +726,13 @@ bit is not set.
 .BI srcport " MIN MAX"
 - specifies the range of port numbers to use as UDP
 source ports to communicate to the remote VXLAN tunnel endpoint.
+
+.sp
+.BI reserved_bits " VALUE "
+- by default the kernel rejects packets that have bits set outside of the fields
+required by the features enabled on the VXLAN netdevice. \fBreserved_bits\fR is
+a 64-bit quantity specifying which bits it should be possible to set in a VXLAN
+header. Each bit set in the value is a tolerated bit set in a packet.
 
 .sp
 .RB [ no ] learning
@@ -868,10 +882,14 @@ the following additional arguments are supported:
 [
 .BI mode " MODE "
 ] [
+.BI scrub " SCRUB "
+] [
 .I "POLICY "
 ] [
 .BR peer
 [
+.BI scrub " SCRUB "
+] [
 .I "POLICY "
 ] [
 .I "NAME "
@@ -883,6 +901,17 @@ the following additional arguments are supported:
 .BI mode " MODE"
 - specifies the operation mode of the netkit device with "l3" and "l2"
 as possible values. Default option is "l3".
+
+.sp
+.BI scrub " SCRUB"
+- specifies the scrub behavior of the netkit device with "default" and
+"none" as possible values. With "default" the device zeroes the
+skb->{mark,priority} fields before invoking the attached BPF program
+when its peer device resides in a different network namespace. With
+"none" the device leaves clearing skb->{mark,priority} up to the BPF
+program. Default option is "default". Specifying scrub before the peer
+option refers to the primary device, after the peer option refers to
+the peer device.
 
 .sp
 .I "POLICY"
@@ -1621,6 +1650,8 @@ the following additional arguments are supported:
 
 .BI "ip link add link " DEVICE " name " NAME " type hsr"
 .BI slave1 " SLAVE1-IF " slave2 " SLAVE2-IF "
+.RB [ " interlink"
+.IR INTERLINK-IF " ] "
 .RB [ " supervision"
 .IR ADDR-BYTE " ] ["
 .BR version " { " 0 " | " 1 " } ["
@@ -1636,6 +1667,9 @@ the following additional arguments are supported:
 
 .BI slave2 " SLAVE2-IF "
 - Specifies the physical device used for the second of the two ring ports.
+
+.BI interlink " INTERLINK-IF"
+- The interlink device bound to the HSR network to connect SAN device(s).
 
 .BI supervision " ADDR-BYTE"
 - The last byte of the multicast address used for HSR supervision frames.
@@ -1674,6 +1708,8 @@ the following additional arguments are supported:
 .BI max_age " MAX_AGE "
 ] [
 .BI stp_state " STP_STATE "
+] [
+.BI mst_enabled " MST_ENABLED "
 ] [
 .BI priority " PRIORITY "
 ] [
@@ -1777,6 +1813,18 @@ are between 6 and 40.
 or off
 .RI ( STP_STATE " == 0). "
 for this bridge.
+
+.BI mst_enabled " MST_ENABLED "
+- turn multiple spanning tree (MST) support on
+.RI ( MST_ENABLED " > 0) "
+or off
+.RI ( MST_ENABLED " == 0). "
+When enabled, sets of VLANs can be associated with multiple spanning
+tree instances (MSTIs), and STP states for each port can be controlled
+on a per-MSTI basis. Note: no implementation of the MSTP protocol is
+provided, only the primitives needed to implement it. To avoid
+interfering with the legacy per-VLAN STP states, this setting can only
+be changed when no bridge VLANs are configured.
 
 .BI priority " PRIORITY "
 - set this bridge's spanning tree priority, used during STP root
@@ -2124,6 +2172,12 @@ the following additional arguments are supported:
 .BI restart_count " RESTART_COUNT "
 - GTP instance restart counter
 
+.TP
+PFCP Type Support
+For a link of type
+.I PFCP
+no additional arguments are supported
+
 .in -8
 
 .SS ip link delete - delete virtual link
@@ -2437,7 +2491,7 @@ loaded under
 .B xdpgeneric object "|" pinned
 then the kernel will use the generic XDP variant instead of the native one.
 .B xdpdrv
-has the opposite effect of requestsing that the automatic fallback to the
+has the opposite effect of requesting that the automatic fallback to the
 generic XDP variant be disabled and in case driver is not XDP-capable error
 should be returned.
 .B xdpdrv
@@ -2446,7 +2500,7 @@ also disables hardware offloads.
 in ip link output indicates that the program has been offloaded to hardware
 and can also be used to request the "offload" mode, much like
 .B xdpgeneric
-it forces program to be installed specifically in HW/FW of the apater.
+it forces program to be installed specifically in HW/FW of the adapter.
 
 .B off
 (or
@@ -2874,6 +2928,10 @@ specifies what group of devices to show.
 only display running interfaces.
 
 .TP
+.B down
+only display not running interfaces.
+
+.TP
 .BI master " DEVICE "
 .I DEVICE
 specifies the master device which enslaves devices to show.
@@ -2897,6 +2955,10 @@ output.
 .TP
 .B nomaster
 only show devices with no master
+
+.TP
+.B novf
+only show devices with no VF info
 
 .SS  ip link xstats - display extended statistics
 

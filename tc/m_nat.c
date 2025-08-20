@@ -55,7 +55,7 @@ parse_nat_args(int *argc_p, char ***argv_p, struct tc_nat *sel)
 		goto bad_val;
 
 	sel->old_addr = addr.data[0];
-	sel->mask = htonl(~0u << (32 - addr.bitlen));
+	sel->mask = htonl(~(uint64_t)0 << (32 - addr.bitlen));
 
 	NEXT_ARG();
 
@@ -156,7 +156,7 @@ print_nat(const struct action_util *au, FILE * f, struct rtattr *arg)
 	}
 	sel = RTA_DATA(tb[TCA_NAT_PARMS]);
 
-	len = ffs(sel->mask);
+	len = ffs(ntohl(sel->mask));
 	len = len ? 33 - len : 0;
 
 	print_string(PRINT_ANY, "direction", "%s",
@@ -169,7 +169,7 @@ print_nat(const struct action_util *au, FILE * f, struct rtattr *arg)
 	print_string(PRINT_ANY, "new_addr", " %s",
 		     format_host_r(AF_INET, 4, &sel->new_addr, buf1, sizeof(buf1)));
 
-	print_action_control(f, " ", sel->action, "");
+	print_action_control(" ", sel->action, "");
 	print_nl();
 	print_uint(PRINT_ANY, "index", "\t index %u", sel->index);
 	print_int(PRINT_ANY, "ref", " ref %d", sel->refcnt);
@@ -179,7 +179,7 @@ print_nat(const struct action_util *au, FILE * f, struct rtattr *arg)
 		if (tb[TCA_NAT_TM]) {
 			struct tcf_t *tm = RTA_DATA(tb[TCA_NAT_TM]);
 
-			print_tm(f, tm);
+			print_tm(tm);
 		}
 	}
 

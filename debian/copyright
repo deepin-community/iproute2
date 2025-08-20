@@ -39,6 +39,7 @@ Copyright: 1996 Tom Lees <tom@lpsg.demon.co.uk>
            2005-2017 Alexander Wirt <formorer@debian.org>
            2008-2015 Andreas Henriksson <andreas@fatal.se>
            2017-2024 Luca Boccassi <bluca@debian.org>
+           2025 Debian Turkish L10n Team
 License: GPL-2
 
 License: GPL-2
@@ -52,8 +53,7 @@ License: GPL-2
  GNU General Public License for more details.
  .
  You should have received a copy of the GNU General Public License
- along with this package; if not, write to the Free Software
- Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+ along with this package; if not, see <https://www.gnu.org/licenses/>
  .
  On Debian systems, the complete text of the GNU General Public License version
  2 can be found in `/usr/share/common-licenses/GPL-2'.

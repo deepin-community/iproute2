@@ -16,8 +16,8 @@ static int res_help(struct rd *rd)
 	pr_out("          resource show qp link [DEV/PORT] [FILTER-NAME FILTER-VALUE]\n");
 	pr_out("          resource show cm_id link [DEV/PORT]\n");
 	pr_out("          resource show cm_id link [DEV/PORT] [FILTER-NAME FILTER-VALUE]\n");
-	pr_out("          resource show cq link [DEV/PORT]\n");
-	pr_out("          resource show cq link [DEV/PORT] [FILTER-NAME FILTER-VALUE]\n");
+	pr_out("          resource show cq dev [DEV]\n");
+	pr_out("          resource show cq dev [DEV] [FILTER-NAME FILTER-VALUE]\n");
 	pr_out("          resource show pd dev [DEV]\n");
 	pr_out("          resource show pd dev [DEV] [FILTER-NAME FILTER-VALUE]\n");
 	pr_out("          resource show mr dev [DEV]\n");
@@ -99,6 +99,8 @@ int _res_send_idx_msg(struct rd *rd, uint32_t command, mnl_cb_t callback,
 				 RDMA_NLDEV_ATTR_PORT_INDEX, rd->port_idx);
 
 	mnl_attr_put_u32(rd->nlh, id, idx);
+	mnl_attr_put_u8(rd->nlh, RDMA_NLDEV_ATTR_DRIVER_DETAILS,
+			rd->show_driver_details);
 
 	if (command == RDMA_NLDEV_CMD_STAT_GET)
 		mnl_attr_put_u32(rd->nlh, RDMA_NLDEV_ATTR_STAT_RES,
@@ -121,6 +123,9 @@ int _res_send_msg(struct rd *rd, uint32_t command, mnl_cb_t callback)
 		flags |= NLM_F_DUMP;
 
 	rd_prepare_msg(rd, command, &seq, flags);
+
+	mnl_attr_put_u8(rd->nlh, RDMA_NLDEV_ATTR_DRIVER_DETAILS,
+			rd->show_driver_details);
 	mnl_attr_put_u32(rd->nlh, RDMA_NLDEV_ATTR_DEV_INDEX, rd->dev_idx);
 	if (rd->port_idx)
 		mnl_attr_put_u32(rd->nlh,

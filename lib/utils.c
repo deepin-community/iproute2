@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <math.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -38,7 +39,12 @@
 int resolve_hosts;
 int timestamp_short;
 int pretty;
+int use_iec;
+int human_readable;
 const char *_SL_ = "\n";
+
+static int open_fds[5];
+static int open_fds_cnt;
 
 static int af_byte_len(int af);
 static void print_time(char *buf, int len, __u32 time);
@@ -67,7 +73,6 @@ int read_prop(const char *dev, char *prop, long *value)
 
 	if (!fgets(buf, sizeof(buf), fp)) {
 		fprintf(stderr, "property \"%s\" in file %s is currently unknown\n", prop, fname);
-		fclose(fp);
 		goto out;
 	}
 
@@ -92,6 +97,7 @@ int read_prop(const char *dev, char *prop, long *value)
 	*value = result;
 	return 0;
 out:
+	fclose(fp);
 	fprintf(stderr, "Failed to parse %s\n", fname);
 	return -1;
 }
@@ -298,10 +304,6 @@ int get_u64(__u64 *val, const char *arg, int base)
 	if (res == ULLONG_MAX && errno == ERANGE)
 		return -1;
 
-	/* in case ULL is 128 bits */
-	if (res > 0xFFFFFFFFFFFFFFFFULL)
-		return -1;
-
 	*val = res;
 	return 0;
 }
@@ -392,8 +394,6 @@ int get_s64(__s64 *val, const char *arg, int base)
 	if (!ptr || ptr == arg || *ptr)
 		return -1;
 	if ((res == LLONG_MIN || res == LLONG_MAX) && errno == ERANGE)
-		return -1;
-	if (res > INT64_MAX || res < INT64_MIN)
 		return -1;
 
 	*val = res;
@@ -806,7 +806,7 @@ void duparg(const char *key, const char *arg)
 void duparg2(const char *key, const char *arg)
 {
 	fprintf(stderr,
-		"Error: either \"%s\" is duplicate, or \"%s\" is a garbage.\n",
+		"Error: either \"%s\" is duplicate, or \"%s\" is garbage.\n",
 		key, arg);
 	exit(-1);
 }
@@ -2016,4 +2016,63 @@ FILE *generic_proc_open(const char *env, const char *name)
 	}
 
 	return fopen(p, "r");
+}
+
+void print_num(FILE *fp, unsigned int width, uint64_t count)
+{
+	const char *prefix = "kMGTPE";
+	const unsigned int base = use_iec ? 1024 : 1000;
+	uint64_t powi = 1;
+	uint16_t powj = 1;
+	uint8_t precision = 2;
+	char buf[64];
+
+	if (!human_readable || count < base) {
+		fprintf(fp, "%*"PRIu64" ", width, count);
+		return;
+	}
+
+	/* increase value by a factor of 1000/1024 and print
+	 * if result is something a human can read
+	 */
+	for (;;) {
+		powi *= base;
+		if (count / base < powi)
+			break;
+
+		if (!prefix[1])
+			break;
+		++prefix;
+	}
+
+	/* try to guess a good number of digits for precision */
+	for (; precision > 0; precision--) {
+		powj *= 10;
+		if (count / powi < powj)
+			break;
+	}
+
+	snprintf(buf, sizeof(buf), "%.*f%c%s", precision,
+		 (double) count / powi, *prefix, use_iec ? "i" : "");
+
+	fprintf(fp, "%*s ", width, buf);
+}
+
+int open_fds_add(int fd)
+{
+	if (open_fds_cnt >= ARRAY_SIZE(open_fds))
+		return -1;
+
+	open_fds[open_fds_cnt++] = fd;
+	return 0;
+}
+
+void open_fds_close(void)
+{
+	int i;
+
+	for (i = 0; i < open_fds_cnt; i++)
+		close(open_fds[i]);
+
+	open_fds_cnt = 0;
 }

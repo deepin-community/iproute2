@@ -36,6 +36,8 @@ ip-rule \- routing policy database management
 .IR PREFIX " ] [ "
 .B  tos
 .IR TOS " ] [ "
+.B  dscp
+.IR DSCP\fR[\fB/\fIMASK "] ] [ "
 .B  fwmark
 .IR FWMARK\fR[\fB/\fIMASK "] ] [ "
 .B  iif
@@ -50,13 +52,15 @@ ip-rule \- routing policy database management
 .B ipproto
 .IR PROTOCOL " ] [ "
 .BR sport " [ "
-.IR NUMBER " | "
+.IR NUMBER\fR[\fB/\fIMASK "] | "
 .IR NUMBER "-" NUMBER " ] ] [ "
 .BR dport " [ "
-.IR NUMBER " | "
+.IR NUMBER\fR[\fB/\fIMASK "] | "
 .IR NUMBER "-" NUMBER " ] ] [ "
 .B  tun_id
-.IR TUN_ID " ]"
+.IR TUN_ID " ] [ "
+.B  flowlabel
+.IR FLOWLABEL\fR[\fB/\fIMASK "] ]"
 .BR
 
 
@@ -220,7 +224,7 @@ select the destination prefix to match.
 select the incoming device to match. If the interface is loopback,
 the rule only matches packets originating from this host. This means
 that you may create separate routing tables for forwarded and local
-packets and, hence, completely segregate them.
+packets and, hence, completely separate them.
 
 .TP
 .BI oif " NAME"
@@ -233,6 +237,22 @@ a device.
 .TP
 .BI dsfield " TOS"
 select the TOS value to match.
+
+.TP
+.BI dscp " DSCP\fR[\fB/\fIMASK\fR]"
+select the DSCP value to match with an optional mask. DSCP values can be
+written either directly as numeric values (valid values are 0-63), or using
+symbolic names specified in
+.BR @SYSCONF_USR_DIR@/rt_dsfield " or " @SYSCONF_ETC_DIR@/rt_dsfield
+(has precedence if exists).
+However, note that the file specifies full 8-bit dsfield values, whereas
+.B ip rule
+will only use the higher six bits.
+.B ip rule show
+will similarly format DSCP values as symbolic names if possible. The
+command line option
+.B -N
+turns the show translation off.
 
 .TP
 .BI fwmark " MARK"
@@ -251,12 +271,14 @@ value to match.
 select the ip protocol value to match.
 
 .TP
-.BI sport " NUMBER | NUMBER-NUMBER"
-select the source port value to match. supports port range.
+.BI sport " NUMBER\fR[\fB/\fIMASK\fR] | NUMBER-NUMBER"
+select the source port value to match with an optional mask. Supports port
+range.
 
 .TP
-.BI dport " NUMBER | NUMBER-NUMBER"
-select the destination port value to match. supports port range.
+.BI dport " NUMBER\fR[\fB/\fIMASK\fR] | NUMBER-NUMBER"
+select the destination port value to match with an optional mask. Supports port
+range.
 
 .TP
 .BI priority " PREFERENCE"
@@ -304,6 +326,10 @@ routes) or a local host address (or even zero).
 In the last case the router does not translate the packets, but
 masquerades them to this address.
 Using map-to instead of nat means the same thing.
+
+.TP
+.BI flowlabel " FLOWLABEL\fR[\fB/\fIMASK\fR]"
+select the IPv6 flow label to match with an optional mask.
 
 .B Warning:
 Changes to the RPDB made with these commands do not become active
